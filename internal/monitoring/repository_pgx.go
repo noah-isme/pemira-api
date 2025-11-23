@@ -118,7 +118,7 @@ LEFT JOIN (
         COUNT(*) AS total_checkins,
         COUNT(*) FILTER (WHERE status = 'APPROVED') AS approved_checkins,
         COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_checkins,
-        MAX(GREATEST(scan_at, COALESCE(approved_at, scan_at), COALESCE(voted_at, scan_at))) AS last_checkin_at
+        MAX(GREATEST(scan_at, COALESCE(approved_at, scan_at))) AS last_checkin_at
     FROM tps_checkins
     WHERE election_id = $1
     GROUP BY tps_id
