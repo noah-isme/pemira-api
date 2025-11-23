@@ -3,32 +3,34 @@ package tps
 import "time"
 
 type TPSDTO struct {
-	ID           int64     `json:"id"`
-	Code         string    `json:"code"`
-	Name         string    `json:"name"`
-	Location     string    `json:"location"`
-	Capacity     int       `json:"capacity"`
-	IsActive     bool      `json:"is_active"`
-	OpenTime     *string   `json:"open_time,omitempty"`
-	CloseTime    *string   `json:"close_time,omitempty"`
-	PICName      *string   `json:"pic_name,omitempty"`
-	PICPhone     *string   `json:"pic_phone,omitempty"`
-	Notes        *string   `json:"notes,omitempty"`
-	HasActiveQR  bool      `json:"has_active_qr"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID          int64     `json:"id"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Location    string    `json:"location"`
+	Capacity    int       `json:"capacity"`
+	IsActive    bool      `json:"is_active"`
+	OpenTime    *string   `json:"open_time,omitempty"`
+	CloseTime   *string   `json:"close_time,omitempty"`
+	PICName     *string   `json:"pic_name,omitempty"`
+	PICPhone    *string   `json:"pic_phone,omitempty"`
+	Notes       *string   `json:"notes,omitempty"`
+	HasActiveQR bool      `json:"has_active_qr"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type TPSCreateRequest struct {
-	Code      string  `json:"code"`
-	Name      string  `json:"name"`
-	Location  string  `json:"location"`
-	Capacity  int     `json:"capacity"`
-	OpenTime  *string `json:"open_time,omitempty"`
-	CloseTime *string `json:"close_time,omitempty"`
-	PICName   *string `json:"pic_name,omitempty"`
-	PICPhone  *string `json:"pic_phone,omitempty"`
-	Notes     *string `json:"notes,omitempty"`
+	ElectionID *int64  `json:"election_id,omitempty"`
+	Code       string  `json:"code"`
+	Name       string  `json:"name"`
+	Location   string  `json:"location"`
+	Capacity   int     `json:"capacity"`
+	IsActive   *bool   `json:"is_active,omitempty"`
+	OpenTime   *string `json:"open_time,omitempty"`
+	CloseTime  *string `json:"close_time,omitempty"`
+	PICName    *string `json:"pic_name,omitempty"`
+	PICPhone   *string `json:"pic_phone,omitempty"`
+	Notes      *string `json:"notes,omitempty"`
 }
 
 type TPSUpdateRequest struct {
@@ -74,10 +76,10 @@ type CreateOperatorRequest struct {
 }
 
 type TPSQRMetadataResponse struct {
-	TPSID     int64        `json:"tps_id"`
-	Code      string       `json:"code"`
-	Name      string       `json:"name"`
-	ActiveQR  *ActiveQRDTO `json:"active_qr,omitempty"`
+	TPSID    int64        `json:"tps_id"`
+	Code     string       `json:"code"`
+	Name     string       `json:"name"`
+	ActiveQR *ActiveQRDTO `json:"active_qr,omitempty"`
 }
 
 type ActiveQRDTO struct {
@@ -87,10 +89,10 @@ type ActiveQRDTO struct {
 }
 
 type TPSQRRotateResponse struct {
-	TPSID     int64        `json:"tps_id"`
-	Code      string       `json:"code"`
-	Name      string       `json:"name"`
-	ActiveQR  ActiveQRDTO  `json:"active_qr"`
+	TPSID    int64       `json:"tps_id"`
+	Code     string      `json:"code"`
+	Name     string      `json:"name"`
+	ActiveQR ActiveQRDTO `json:"active_qr"`
 }
 
 type TPSQRPrintResponse struct {

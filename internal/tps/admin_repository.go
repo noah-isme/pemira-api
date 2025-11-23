@@ -4,7 +4,7 @@ import "context"
 
 type AdminRepository interface {
 	// TPS CRUD
-	List(ctx context.Context) ([]TPSDTO, error)
+	List(ctx context.Context, electionID int64) ([]TPSDTO, error)
 	GetByID(ctx context.Context, id int64) (*TPSDTO, error)
 	Create(ctx context.Context, req TPSCreateRequest) (*TPSDTO, error)
 	Update(ctx context.Context, id int64, req TPSUpdateRequest) (*TPSDTO, error)

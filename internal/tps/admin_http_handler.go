@@ -27,7 +27,14 @@ func parseIDParam(r *http.Request, name string) (int64, error) {
 func (h *AdminHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	items, err := h.svc.List(ctx)
+	electionID := int64(1)
+	if qs := r.URL.Query().Get("election_id"); qs != "" {
+		if parsed, err := strconv.ParseInt(qs, 10, 64); err == nil && parsed > 0 {
+			electionID = parsed
+		}
+	}
+
+	items, err := h.svc.List(ctx, electionID)
 	if err != nil {
 		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil daftar TPS.")
 		return
@@ -230,69 +237,69 @@ func (h *AdminHandler) Monitor(w http.ResponseWriter, r *http.Request) {
 
 // GetQRMetadata handles GET /admin/tps/{tpsID}/qr
 func (h *AdminHandler) GetQRMetadata(w http.ResponseWriter, r *http.Request) {
-ctx := r.Context()
+	ctx := r.Context()
 
-tpsID, err := parseIDParam(r, "tpsID")
-if err != nil {
-response.BadRequest(w, "VALIDATION_ERROR", "ID TPS tidak valid.")
-return
-}
+	tpsID, err := parseIDParam(r, "tpsID")
+	if err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "ID TPS tidak valid.")
+		return
+	}
 
-metadata, err := h.svc.GetQRMetadata(ctx, tpsID)
-if err != nil {
-if errors.Is(err, ErrTPSNotFound) {
-response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
-return
-}
-response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil metadata QR.")
-return
-}
+	metadata, err := h.svc.GetQRMetadata(ctx, tpsID)
+	if err != nil {
+		if errors.Is(err, ErrTPSNotFound) {
+			response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil metadata QR.")
+		return
+	}
 
-response.JSON(w, http.StatusOK, metadata)
+	response.JSON(w, http.StatusOK, metadata)
 }
 
 // RotateQR handles POST /admin/tps/{tpsID}/qr/rotate
 func (h *AdminHandler) RotateQR(w http.ResponseWriter, r *http.Request) {
-ctx := r.Context()
+	ctx := r.Context()
 
-tpsID, err := parseIDParam(r, "tpsID")
-if err != nil {
-response.BadRequest(w, "VALIDATION_ERROR", "ID TPS tidak valid.")
-return
-}
+	tpsID, err := parseIDParam(r, "tpsID")
+	if err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "ID TPS tidak valid.")
+		return
+	}
 
-result, err := h.svc.RotateQR(ctx, tpsID)
-if err != nil {
-if errors.Is(err, ErrTPSNotFound) {
-response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
-return
-}
-response.InternalServerError(w, "INTERNAL_ERROR", "Gagal rotate QR.")
-return
-}
+	result, err := h.svc.RotateQR(ctx, tpsID)
+	if err != nil {
+		if errors.Is(err, ErrTPSNotFound) {
+			response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal rotate QR.")
+		return
+	}
 
-response.JSON(w, http.StatusOK, result)
+	response.JSON(w, http.StatusOK, result)
 }
 
 // GetQRForPrint handles GET /admin/tps/{tpsID}/qr/print
 func (h *AdminHandler) GetQRForPrint(w http.ResponseWriter, r *http.Request) {
-ctx := r.Context()
+	ctx := r.Context()
 
-tpsID, err := parseIDParam(r, "tpsID")
-if err != nil {
-response.BadRequest(w, "VALIDATION_ERROR", "ID TPS tidak valid.")
-return
-}
+	tpsID, err := parseIDParam(r, "tpsID")
+	if err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "ID TPS tidak valid.")
+		return
+	}
 
-printData, err := h.svc.GetQRForPrint(ctx, tpsID)
-if err != nil {
-if errors.Is(err, ErrTPSNotFound) {
-response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
-return
-}
-response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil data cetak QR.")
-return
-}
+	printData, err := h.svc.GetQRForPrint(ctx, tpsID)
+	if err != nil {
+		if errors.Is(err, ErrTPSNotFound) {
+			response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil data cetak QR.")
+		return
+	}
 
-response.JSON(w, http.StatusOK, printData)
+	response.JSON(w, http.StatusOK, printData)
 }

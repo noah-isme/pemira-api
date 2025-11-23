@@ -11,8 +11,8 @@ func NewAdminService(repo AdminRepository) *AdminService {
 }
 
 // CRUD TPS
-func (s *AdminService) List(ctx context.Context) ([]TPSDTO, error) {
-	return s.repo.List(ctx)
+func (s *AdminService) List(ctx context.Context, electionID int64) ([]TPSDTO, error) {
+	return s.repo.List(ctx, electionID)
 }
 
 func (s *AdminService) Get(ctx context.Context, id int64) (*TPSDTO, error) {
