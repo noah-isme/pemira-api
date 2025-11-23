@@ -46,6 +46,15 @@ func (h *Handler) MountPanel(r chi.Router) {
 	r.Get("/tps/{tpsID}/summary", h.PanelGetSummary)
 }
 
+func parsePathID(r *http.Request, keys ...string) (int64, error) {
+	for _, k := range keys {
+		if val := chi.URLParam(r, k); val != "" {
+			return strconv.ParseInt(val, 10, 64)
+		}
+	}
+	return 0, strconv.ErrSyntax
+}
+
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Admin TPS Management
 	r.Route("/admin/tps", func(r chi.Router) {
@@ -265,7 +274,7 @@ func (h *Handler) StudentCheckinStatus(w http.ResponseWriter, r *http.Request) {
 // ===== TPS PANEL ENDPOINTS =====
 
 func (h *Handler) PanelGetSummary(w http.ResponseWriter, r *http.Request) {
-	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	tpsID, err := parsePathID(r, "tps_id", "tpsID")
 	if err != nil {
 		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
@@ -289,7 +298,7 @@ func (h *Handler) PanelGetSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PanelListCheckins(w http.ResponseWriter, r *http.Request) {
-	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	tpsID, err := parsePathID(r, "tps_id", "tpsID")
 	if err != nil {
 		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
@@ -320,13 +329,13 @@ func (h *Handler) PanelListCheckins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PanelApproveCheckin(w http.ResponseWriter, r *http.Request) {
-	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	tpsID, err := parsePathID(r, "tps_id", "tpsID")
 	if err != nil {
 		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 
-	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkin_id"), 10, 64)
+	checkinID, err := parsePathID(r, "checkin_id", "checkinID")
 	if err != nil {
 		response.BadRequest(w, "INVALID_REQUEST", "Invalid check-in ID")
 		return
@@ -357,13 +366,13 @@ func (h *Handler) PanelApproveCheckin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PanelRejectCheckin(w http.ResponseWriter, r *http.Request) {
-	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	tpsID, err := parsePathID(r, "tps_id", "tpsID")
 	if err != nil {
 		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 
-	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkin_id"), 10, 64)
+	checkinID, err := parsePathID(r, "checkin_id", "checkinID")
 	if err != nil {
 		response.BadRequest(w, "INVALID_REQUEST", "Invalid check-in ID")
 		return
