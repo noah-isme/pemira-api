@@ -59,6 +59,7 @@ func main() {
 	candidatePgRepo := candidate.NewPgCandidateRepository(pool)
 	candidateStatsProvider := candidate.NewPgStatsProvider(pool)
 	monitoringRepo := monitoring.NewPgRepository(pool)
+	tpsRepo := tps.NewPostgresRepositoryFromPool(pool)
 
 	voterRepo := voting.NewVoterRepository()
 	candidateRepo := voting.NewCandidateRepository()
@@ -78,6 +79,7 @@ func main() {
 	electionAdminService := election.NewAdminService(electionAdminRepo)
 	dptService := dpt.NewService(dptRepo)
 	tpsAdminService := tps.NewAdminService(tpsAdminRepo)
+	tpsService := tps.NewService(tpsRepo)
 	candidateService := candidate.NewService(candidatePgRepo, candidateStatsProvider)
 	candidateHandler := candidate.NewHandler(candidateService)
 	monitoringService := monitoring.NewService(monitoringRepo)
@@ -99,6 +101,7 @@ func main() {
 	votingHandler := voting.NewVotingHandler(votingService)
 	dptHandler := dpt.NewHandler(dptService)
 	tpsAdminHandler := tps.NewAdminHandler(tpsAdminService)
+	tpsHandler := tps.NewTPSHandler(tpsService)
 	candidateAdminHandler := candidate.NewAdminHandler(candidateService)
 	monitoringHandler := monitoring.NewHandler(monitoringService)
 
@@ -172,6 +175,10 @@ func main() {
 			// Voter TPS QR (student/admin)
 			r.Get("/voters/{voterID}/tps/qr", votingHandler.GetVoterTPSQR)
 			r.Post("/voters/{voterID}/tps/qr", votingHandler.GenerateVoterTPSQR)
+
+			// TPS student check-in
+			r.Post("/tps/checkin/scan", tpsHandler.ScanQR)
+			r.Get("/tps/checkin/status", tpsHandler.StudentCheckinStatus)
 
 			// Voting routes (student only)
 			r.Group(func(r chi.Router) {
@@ -252,6 +259,12 @@ func main() {
 					r.Post("/{tpsID}/operators", tpsAdminHandler.CreateOperator)
 					r.Delete("/{tpsID}/operators/{userID}", tpsAdminHandler.RemoveOperator)
 				})
+
+				// TPS panel (admin can view)
+				r.Get("/tps/{tpsID}/summary", tpsHandler.PanelGetSummary)
+				r.Get("/tps/{tpsID}/checkins", tpsHandler.PanelListCheckins)
+				r.Post("/tps/{tpsID}/checkins/{checkinID}/approve", tpsHandler.ApproveCheckin)
+				r.Post("/tps/{tpsID}/checkins/{checkinID}/reject", tpsHandler.PanelRejectCheckin)
 			})
 
 			// TPS Operator routes
@@ -259,6 +272,12 @@ func main() {
 				r.Use(httpMiddleware.AuthTPSOperatorOnly(jwtManager))
 				r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", votingHandler.ScanTPSCandidate)
 				r.Post("/tps/ballots/parse-qr", votingHandler.ParseBallotQR)
+
+				// TPS panel for operator
+				r.Get("/tps/{tpsID}/summary", tpsHandler.PanelGetSummary)
+				r.Get("/tps/{tpsID}/checkins", tpsHandler.PanelListCheckins)
+				r.Post("/tps/{tpsID}/checkins/{checkinID}/approve", tpsHandler.ApproveCheckin)
+				r.Post("/tps/{tpsID}/checkins/{checkinID}/reject", tpsHandler.PanelRejectCheckin)
 			})
 		})
 	})
