@@ -488,7 +488,7 @@ func (r *PostgresRepository) CountCheckins(ctx context.Context, tpsID int64, sta
 func (r *PostgresRepository) IsVoterEligible(ctx context.Context, voterID, electionID int64) (bool, error) {
 	query := `
 		SELECT is_eligible 
-		FROM voter_eligibility 
+		FROM voter_status 
 		WHERE voter_id = $1 AND election_id = $2
 	`
 
@@ -505,8 +505,8 @@ func (r *PostgresRepository) IsVoterEligible(ctx context.Context, voterID, elect
 func (r *PostgresRepository) HasVoterVoted(ctx context.Context, voterID, electionID int64) (bool, error) {
 	query := `
 		SELECT EXISTS(
-			SELECT 1 FROM votes 
-			WHERE voter_id = $1 AND election_id = $2
+			SELECT 1 FROM voter_status 
+			WHERE voter_id = $1 AND election_id = $2 AND has_voted = TRUE
 		)
 	`
 
@@ -517,8 +517,8 @@ func (r *PostgresRepository) HasVoterVoted(ctx context.Context, voterID, electio
 
 func (r *PostgresRepository) GetVoterInfo(ctx context.Context, voterID int64) (*VoterInfo, error) {
 	query := `
-		SELECT id, nim, name, faculty, study_program, cohort_year, academic_status
-		FROM users
+		SELECT id, nim, name, faculty_name, study_program_name, cohort_year, academic_status
+		FROM voters
 		WHERE id = $1
 	`
 
