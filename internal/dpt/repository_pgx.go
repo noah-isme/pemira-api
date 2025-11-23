@@ -118,9 +118,11 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			v.name,
 			v.faculty_name,
 			v.study_program_name,
+			COALESCE(v.class_label, '') AS semester,
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
+			ua.role,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -145,15 +147,19 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 	var items []VoterWithStatusDTO
 	for rows.Next() {
 		var item VoterWithStatusDTO
+		var semester string
+		var voterType *string
 		err := rows.Scan(
 			&item.VoterID,
 			&item.NIM,
 			&item.Name,
 			&item.FacultyName,
 			&item.StudyProgramName,
+			&semester,
 			&item.CohortYear,
 			&item.Email,
 			&item.HasAccount,
+			&voterType,
 			&item.Status.IsEligible,
 			&item.Status.HasVoted,
 			&item.Status.LastVoteAt,
@@ -162,6 +168,10 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan voter: %w", err)
+		}
+		item.Semester = strings.TrimSpace(semester)
+		if voterType != nil {
+			item.VoterType = *voterType
 		}
 		items = append(items, item)
 	}
@@ -183,9 +193,11 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			v.name,
 			v.faculty_name,
 			v.study_program_name,
+			COALESCE(v.class_label, '') AS semester,
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
+			ua.role,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -206,15 +218,19 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 
 	for rows.Next() {
 		var item VoterWithStatusDTO
+		var semester string
+		var voterType *string
 		err := rows.Scan(
 			&item.VoterID,
 			&item.NIM,
 			&item.Name,
 			&item.FacultyName,
 			&item.StudyProgramName,
+			&semester,
 			&item.CohortYear,
 			&item.Email,
 			&item.HasAccount,
+			&voterType,
 			&item.Status.IsEligible,
 			&item.Status.HasVoted,
 			&item.Status.LastVoteAt,
@@ -223,6 +239,10 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 		)
 		if err != nil {
 			return fmt.Errorf("scan voter: %w", err)
+		}
+		item.Semester = strings.TrimSpace(semester)
+		if voterType != nil {
+			item.VoterType = *voterType
 		}
 
 		if err := fn(item); err != nil {
