@@ -67,6 +67,28 @@ func (s *Service) ExportStream(
 	return s.repo.StreamVotersForElection(ctx, electionID, filter, fn)
 }
 
+func (s *Service) GetVoterByID(ctx context.Context, electionID int64, voterID int64) (*VoterWithStatusDTO, error) {
+	voter, err := s.repo.GetVoterByID(ctx, electionID, voterID)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Ensure voter has voter_type
+	if voter.VoterType == "" {
+		voter.VoterType = detectVoterType(voter)
+	}
+	
+	return voter, nil
+}
+
+func (s *Service) UpdateVoter(ctx context.Context, electionID int64, voterID int64, updates VoterUpdateDTO) error {
+	return s.repo.UpdateVoter(ctx, electionID, voterID, updates)
+}
+
+func (s *Service) DeleteVoter(ctx context.Context, electionID int64, voterID int64) error {
+	return s.repo.DeleteVoter(ctx, electionID, voterID)
+}
+
 // detectVoterType determines voter type based on available data
 func detectVoterType(voter *VoterWithStatusDTO) string {
 	// Check if semester is valid (not "tidak diisi" or "belum")

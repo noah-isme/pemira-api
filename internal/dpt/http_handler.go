@@ -2,6 +2,7 @@ package dpt
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -277,6 +278,122 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+}
+
+// GET /admin/elections/{electionID}/voters/{voterID}
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseElectionID(r)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	voterIDStr := chi.URLParam(r, "voterID")
+	voterID, err := strconv.ParseInt(voterIDStr, 10, 64)
+	if err != nil || voterID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
+		return
+	}
+
+	voter, err := h.svc.GetVoterByID(ctx, electionID, voterID)
+	if err != nil {
+		slog.Error("failed to get voter", "error", err, "voter_id", voterID)
+		response.NotFound(w, "VOTER_NOT_FOUND", "Pemilih tidak ditemukan.")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, voter)
+}
+
+// PUT /admin/elections/{electionID}/voters/{voterID}
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseElectionID(r)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	voterIDStr := chi.URLParam(r, "voterID")
+	voterID, err := strconv.ParseInt(voterIDStr, 10, 64)
+	if err != nil || voterID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
+		return
+	}
+
+	var updates VoterUpdateDTO
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Request body tidak valid.")
+		return
+	}
+
+	if err := h.svc.UpdateVoter(ctx, electionID, voterID, updates); err != nil {
+		slog.Error("failed to update voter", "error", err, "voter_id", voterID)
+		
+		errMsg := err.Error()
+		if errMsg == "voter not found in this election" {
+			response.NotFound(w, "VOTER_NOT_FOUND", "Pemilih tidak ditemukan.")
+			return
+		}
+		if errMsg == "cannot update voter who has already voted" {
+			response.Forbidden(w, "VOTER_HAS_VOTED", "Tidak dapat mengubah data pemilih yang sudah memilih.")
+			return
+		}
+		
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengupdate pemilih.")
+		return
+	}
+
+	// Get updated voter
+	voter, err := h.svc.GetVoterByID(ctx, electionID, voterID)
+	if err != nil {
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil data pemilih.")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, voter)
+}
+
+// DELETE /admin/elections/{electionID}/voters/{voterID}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseElectionID(r)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	voterIDStr := chi.URLParam(r, "voterID")
+	voterID, err := strconv.ParseInt(voterIDStr, 10, 64)
+	if err != nil || voterID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
+		return
+	}
+
+	if err := h.svc.DeleteVoter(ctx, electionID, voterID); err != nil {
+		slog.Error("failed to delete voter", "error", err, "voter_id", voterID)
+		
+		errMsg := err.Error()
+		if errMsg == "voter not found in this election" {
+			response.NotFound(w, "VOTER_NOT_FOUND", "Pemilih tidak ditemukan.")
+			return
+		}
+		if errMsg == "cannot delete voter who has already voted" {
+			response.Forbidden(w, "VOTER_HAS_VOTED", "Tidak dapat menghapus pemilih yang sudah memilih.")
+			return
+		}
+		
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal menghapus pemilih.")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Pemilih berhasil dihapus",
+	})
 }
 
 func parseIntDefault(s string, def int) int {

@@ -60,3 +60,14 @@ type ImportResult struct {
 	CreatedStatus  int `json:"created_status"`
 	SkippedStatus  int `json:"skipped_status"`
 }
+
+type VoterUpdateDTO struct {
+	Name         *string `json:"name,omitempty"`
+	FacultyName  *string `json:"faculty_name,omitempty"`
+	StudyProgram *string `json:"study_program_name,omitempty"`
+	CohortYear   *int    `json:"cohort_year,omitempty"`
+	Email        *string `json:"email,omitempty"`
+	Phone        *string `json:"phone,omitempty"`
+	IsEligible   *bool   `json:"is_eligible,omitempty"`
+	VoterType    *string `json:"voter_type,omitempty"`
+}

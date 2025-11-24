@@ -223,6 +223,9 @@ func main() {
 					r.Post("/{electionID}/voters/import", dptHandler.Import)
 					r.Get("/{electionID}/voters", dptHandler.List)
 					r.Get("/{electionID}/voters/export", dptHandler.Export)
+					r.Get("/{electionID}/voters/{voterID}", dptHandler.Get)
+					r.Put("/{electionID}/voters/{voterID}", dptHandler.Update)
+					r.Delete("/{electionID}/voters/{voterID}", dptHandler.Delete)
 
 					// TPS monitoring per election
 					r.Get("/{electionID}/tps/monitor", tpsAdminHandler.Monitor)
