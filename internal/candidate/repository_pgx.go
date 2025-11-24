@@ -1,6 +1,7 @@
 package candidate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	storage_go "github.com/supabase-community/storage-go"
 )
 
 // PgCandidateRepository implements CandidateRepository using pgxpool
@@ -523,51 +525,33 @@ func (r *PgCandidateRepository) SaveProfileMedia(
 	candidateID int64,
 	media CandidateMediaCreate,
 ) (*CandidateMedia, error) {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	// Upload to Supabase Storage
+	storage, err := newSupabaseStorage()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to init storage: %w", err)
 	}
-	defer tx.Rollback(ctx)
 
-	var existingProfileID *string
-	err = tx.QueryRow(ctx, `
-SELECT photo_media_id FROM candidates WHERE id = $1 FOR UPDATE
-`, candidateID).Scan(&existingProfileID)
+	// Generate path and upload
+	ext := getExtension(media.ContentType)
+	path := fmt.Sprintf("candidates/%d/profile_%d%s", candidateID, time.Now().Unix(), ext)
+	bucket := getMediaBucket()
+
+	publicURL, err := storage.Upload(ctx, bucket, path, media.Data, media.ContentType)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, ErrCandidateNotFound
-		}
-		return nil, err
+		return nil, fmt.Errorf("failed to upload to storage: %w", err)
 	}
 
-	if existingProfileID != nil {
-		if _, err := tx.Exec(ctx, `DELETE FROM candidate_media WHERE id = $1`, *existingProfileID); err != nil {
-			return nil, err
-		}
-	}
-
-	var createdAt time.Time
-	err = tx.QueryRow(ctx, `
-INSERT INTO candidate_media (id, candidate_id, slot, file_name, content_type, size_bytes, data, created_by_admin_id)
-VALUES ($1, $2, 'profile', $3, $4, $5, $6, $7)
-RETURNING created_at
-`, media.ID, candidateID, media.FileName, media.ContentType, media.SizeBytes, media.Data, media.CreatedByID).Scan(&createdAt)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = tx.Exec(ctx, `
+	// Update candidate photo_url in DB
+	_, err = r.db.Exec(ctx, `
 UPDATE candidates
-SET photo_media_id = $1,
+SET photo_url = $1,
     updated_by_admin_id = $2,
     updated_at = NOW()
 WHERE id = $3
-`, media.ID, media.CreatedByID, candidateID)
+`, publicURL, media.CreatedByID, candidateID)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
+		// Rollback: delete from Supabase
+		_ = storage.Delete(ctx, bucket, path)
 		return nil, err
 	}
 
@@ -578,8 +562,8 @@ WHERE id = $3
 		FileName:    media.FileName,
 		ContentType: media.ContentType,
 		SizeBytes:   media.SizeBytes,
-		Data:        media.Data,
-		CreatedAt:   createdAt,
+		URL:         publicURL,
+		CreatedAt:   time.Now(),
 		CreatedByID: &media.CreatedByID,
 	}, nil
 }
@@ -763,4 +747,56 @@ ORDER BY created_at DESC
 		return nil, rows.Err()
 	}
 	return items, nil
+}
+
+// Helper functions for Supabase
+func newSupabaseStorage() (*supabaseStorage, error) {
+url := os.Getenv("SUPABASE_URL")
+key := os.Getenv("SUPABASE_SECRET_KEY")
+if url == "" || key == "" {
+return nil, fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY required")
+}
+
+client := storage_go.NewClient(url+"/storage/v1", key, nil)
+return &supabaseStorage{client: client, url: url}, nil
+}
+
+type supabaseStorage struct {
+client *storage_go.Client
+url    string
+}
+
+func (s *supabaseStorage) Upload(ctx context.Context, bucket, path string, data []byte, contentType string) (string, error) {
+reader := bytes.NewReader(data)
+_, err := s.client.UploadFile(bucket, path, reader)
+if err != nil {
+return "", err
+}
+return fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.url, bucket, path), nil
+}
+
+func (s *supabaseStorage) Delete(ctx context.Context, bucket, path string) error {
+_, err := s.client.RemoveFile(bucket, []string{path})
+return err
+}
+
+func getExtension(contentType string) string {
+switch contentType {
+case "image/jpeg", "image/jpg":
+return ".jpg"
+case "image/png":
+return ".png"
+case "image/webp":
+return ".webp"
+default:
+return ".bin"
+}
+}
+
+func getMediaBucket() string {
+bucket := os.Getenv("SUPABASE_MEDIA_BUCKET")
+if bucket == "" {
+return "pemira"
+}
+return bucket
 }

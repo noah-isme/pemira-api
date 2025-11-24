@@ -382,6 +382,7 @@ func (h *AdminHandler) UploadProfileMedia(w http.ResponseWriter, r *http.Request
 
 	resp := map[string]interface{}{
 		"id":           saved.ID,
+		"url":          saved.URL,
 		"slot":         saved.Slot,
 		"content_type": saved.ContentType,
 		"size":         saved.SizeBytes,
