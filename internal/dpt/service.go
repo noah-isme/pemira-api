@@ -77,15 +77,7 @@ func detectVoterType(voter *VoterWithStatusDTO) string {
 		return "STUDENT"
 	}
 	
-	// Check NIM length for lecturer/staff
-	nimLen := len(voter.NIM)
-	if nimLen >= 18 {
-		return "LECTURER"
-	}
-	if nimLen >= 16 {
-		return "STAFF"
-	}
-	
-	// Default to STUDENT
+	// Default to STUDENT for all voters
+	// Admin must manually set LECTURER/STAFF type if needed
 	return "STUDENT"
 }
