@@ -159,24 +159,20 @@ func (h *AdminHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusCreated, dto)
 }
 
-// Detail menangani GET /admin/candidates/{candidateID}?election_id=...
+// Detail menangani GET /admin/elections/{electionID}/candidates/{candidateID}
 func (h *AdminHandler) Detail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	// Get electionID from URL path
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
+		return
+	}
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
 		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
-		return
-	}
-
-	electionIDParam := r.URL.Query().Get("election_id")
-	if electionIDParam == "" {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
-		return
-	}
-	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
-	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
@@ -193,20 +189,15 @@ func (h *AdminHandler) Detail(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) Update(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	candidateID, err := parseInt64Param(r, "candidateID")
-	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
 		return
 	}
 
-	electionIDParam := r.URL.Query().Get("election_id")
-	if electionIDParam == "" {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
-		return
-	}
-	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
-	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
+	candidateID, err := parseInt64Param(r, "candidateID")
+	if err != nil || candidateID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
@@ -225,23 +216,21 @@ func (h *AdminHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, dto)
 }
 
-// Delete menangani DELETE /admin/candidates/{candidateID}?election_id=...
+// Delete menangani DELETE /admin/elections/{electionID}/candidates/{candidateID}
 func (h *AdminHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
+		return
+	}
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
 		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
-
-	electionIDParam := r.URL.Query().Get("election_id")
-	if electionIDParam == "" {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
-		return
-	}
-	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
-	if err != nil || electionID <= 0 {
 		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
