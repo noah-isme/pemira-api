@@ -20,6 +20,10 @@ func NewService(repo Repository, adminRepo AdminRepository) *Service {
 	}
 }
 
+func NewServiceLegacy(repo Repository) *Service {
+	return &Service{repo: repo}
+}
+
 func (s *Service) GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, error) {
 	// Try to get VOTING_OPEN election first
 	e, err := s.repo.GetCurrentElection(ctx)
@@ -263,4 +267,16 @@ func (s *Service) GetMeStatus(
 	}
 
 	return dto, nil
+}
+
+// GetMeHistory returns placeholder history for voter dashboard.
+func (s *Service) GetMeHistory(ctx context.Context, authUser auth.AuthUser, electionID int64) (*MeHistoryDTO, error) {
+	if authUser.VoterID == nil {
+		return nil, ErrVoterMappingMissing
+	}
+	if _, err := s.repo.GetByID(ctx, electionID); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetHistory(ctx, electionID, *authUser.VoterID, authUser.ID)
 }

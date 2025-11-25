@@ -7,4 +7,5 @@ type Repository interface {
 	ListPublicElections(ctx context.Context) ([]Election, error)
 	GetByID(ctx context.Context, id int64) (*Election, error)
 	GetVoterStatus(ctx context.Context, electionID, voterID int64) (*MeStatusRow, error)
+	GetHistory(ctx context.Context, electionID, voterID, userID int64) (*MeHistoryDTO, error)
 }

@@ -179,6 +179,7 @@ func main() {
 
 			// Election routes (authenticated)
 			r.Get("/elections/{electionID}/me/status", electionHandler.GetMeStatus)
+			r.Get("/elections/{electionID}/me/history", electionHandler.GetMeHistory)
 
 			// Voter TPS QR (student/admin)
 			r.Get("/voters/{voterID}/tps/qr", votingHandler.GetVoterTPSQR)

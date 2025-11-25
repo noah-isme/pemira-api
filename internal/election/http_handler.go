@@ -16,6 +16,7 @@ type ElectionService interface {
 	ListPublicElections(ctx context.Context) ([]CurrentElectionDTO, error)
 	GetPublicPhases(ctx context.Context, electionID int64) (*ElectionPhasesResponse, error)
 	GetMeStatus(ctx context.Context, authUser auth.AuthUser, electionID int64) (*MeStatusDTO, error)
+	GetMeHistory(ctx context.Context, authUser auth.AuthUser, electionID int64) (*MeHistoryDTO, error)
 }
 
 type Handler struct {
@@ -32,6 +33,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/elections/{electionID}/phases", h.GetPublicPhases)
 	r.Get("/elections/{electionID}/timeline", h.GetPublicPhases) // alias
 	r.Get("/elections/{electionID}/me/status", h.GetMeStatus)
+	r.Get("/elections/{electionID}/me/history", h.GetMeHistory)
 }
 
 func parseInt64Param(r *http.Request, name string) (int64, error) {
@@ -98,6 +100,35 @@ func (h *Handler) GetMeStatus(w http.ResponseWriter, r *http.Request) {
 			response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 			return
 		}
+	}
+
+	response.JSON(w, http.StatusOK, dto)
+}
+
+// GetMeHistory handles GET /elections/{id}/me/history
+func (h *Handler) GetMeHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	dto, err := h.svc.GetMeHistory(ctx, authUser, electionID)
+	if err != nil {
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
+		return
 	}
 
 	response.JSON(w, http.StatusOK, dto)

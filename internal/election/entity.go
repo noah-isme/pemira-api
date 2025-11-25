@@ -45,3 +45,17 @@ type CurrentElectionDTO struct {
 	TPSEnabled    bool               `json:"tps_enabled"`
 	Phases        []ElectionPhaseDTO `json:"phases,omitempty"`
 }
+
+type MeHistoryDTO struct {
+	Voting       []HistoryItem `json:"voting"`
+	Checkins     []HistoryItem `json:"checkins"`
+	Registration []HistoryItem `json:"registration"`
+	QR           []HistoryItem `json:"qr"`
+	Activities   []HistoryItem `json:"activities"`
+}
+
+type HistoryItem struct {
+	Type      string    `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	Details   string    `json:"details,omitempty"`
+}
