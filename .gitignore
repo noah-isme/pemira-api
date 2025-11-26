@@ -7,6 +7,10 @@
 /bin/
 /cmd/api/api
 /cmd/worker/worker
+# Ignore compiled binaries in root
+/pemira-api
+/main
+/api
 
 # Test binary
 *.test
