@@ -73,6 +73,7 @@ type VoterRegistration struct {
 	FacultyName      string
 	StudyProgramName string
 	Semester         string
+	VoterType        string // STUDENT, LECTURER, STAFF
 }
 
 // LecturerRegistration contains data needed to create a lecturer row

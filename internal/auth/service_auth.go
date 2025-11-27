@@ -109,6 +109,7 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 		FacultyName:      req.FacultyName,
 		StudyProgramName: req.StudyProgramName,
 		Semester:         strings.TrimSpace(req.Semester),
+		VoterType:        "STUDENT",
 	})
 	if err != nil {
 		return nil, err
@@ -243,6 +244,7 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			FacultyName:      req.FacultyName,
 			StudyProgramName: req.DepartmentName,
 			Semester:         "",
+			VoterType:        "LECTURER",
 		})
 		if err != nil {
 			_ = s.repo.DeleteLecturer(ctx, lecturerID)
@@ -334,6 +336,7 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			Email:       email,
 			FacultyName: req.UnitName,
 			Semester:    "",
+			VoterType:   "STAFF",
 		})
 		if err != nil {
 			_ = s.repo.DeleteStaff(ctx, staffID)

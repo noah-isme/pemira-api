@@ -456,9 +456,14 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 
 // CreateVoter inserts a new voter record and returns its ID.
 func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration) (int64, error) {
+	voterType := voter.VoterType
+	if voterType == "" {
+		voterType = "STUDENT" // default to STUDENT for backward compatibility
+	}
+	
 	query := `
-		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, class_label, academic_status)
-		VALUES ($1, $2, $3, $4, $5, NULL, $6, 'ACTIVE')
+		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, class_label, academic_status, voter_type)
+		VALUES ($1, $2, $3, $4, $5, NULL, $6, 'ACTIVE', $7)
 		RETURNING id
 	`
 
@@ -474,6 +479,7 @@ func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration)
 		voter.FacultyName,
 		voter.StudyProgramName,
 		classLabel,
+		voterType,
 	).Scan(&id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_voters_nim" {
