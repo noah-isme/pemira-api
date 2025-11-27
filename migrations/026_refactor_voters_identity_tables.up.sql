@@ -21,48 +21,10 @@ CREATE INDEX IF NOT EXISTS idx_students_nim ON students(nim);
 CREATE INDEX IF NOT EXISTS idx_students_faculty ON students(faculty_code, program_code);
 CREATE INDEX IF NOT EXISTS idx_students_cohort ON students(cohort_year);
 
--- 2. Create lecturers table (for LECTURER identity)
-CREATE TABLE IF NOT EXISTS lecturers (
-    id BIGSERIAL PRIMARY KEY,
-    nidn TEXT UNIQUE,
-    name TEXT NOT NULL,
-    faculty_code TEXT,
-    department TEXT,
-    position TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_lecturers_nidn ON lecturers(nidn);
-CREATE INDEX IF NOT EXISTS idx_lecturers_faculty ON lecturers(faculty_code);
-
--- 3. Create staff_members table (for STAFF identity)
-CREATE TABLE IF NOT EXISTS staff_members (
-    id BIGSERIAL PRIMARY KEY,
-    nip TEXT UNIQUE,
-    name TEXT NOT NULL,
-    unit TEXT,
-    job_title TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_staff_members_nip ON staff_members(nip);
-CREATE INDEX IF NOT EXISTS idx_staff_members_unit ON staff_members(unit);
-
--- 4. Add triggers for updated_at
+-- 2-4. lecturers/staff_members sudah dibuat di migrasi 008; tidak diubah di sini
+--     hanya tambahkan trigger untuk students
 CREATE TRIGGER update_students_updated_at
     BEFORE UPDATE ON students
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_lecturers_updated_at
-    BEFORE UPDATE ON lecturers
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_staff_members_updated_at
-    BEFORE UPDATE ON staff_members
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
@@ -97,8 +59,7 @@ WHERE v.nim = s.nim
 
 -- 8. Add indexes for foreign keys
 CREATE INDEX IF NOT EXISTS idx_voters_student_id ON voters(student_id);
-CREATE INDEX IF NOT EXISTS idx_voters_lecturer_id ON voters(lecturer_id);
-CREATE INDEX IF NOT EXISTS idx_voters_staff_id ON voters(staff_id);
+-- idx_voters_lecturer_id dan idx_voters_staff_id sudah ada dari migrasi 008
 
 -- 9. Add constraint to ensure one identity type per voter
 ALTER TABLE voters ADD CONSTRAINT chk_voters_single_identity
