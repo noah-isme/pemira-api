@@ -23,7 +23,7 @@ func (s *ServiceWithWebSocket) ScanQR(ctx context.Context, voterID int64, req *S
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Broadcast new check-in to WebSocket clients
 	if s.wsHub != nil && result.CheckinID > 0 {
 		voterInfo, _ := s.repo.GetVoterInfo(ctx, voterID)
@@ -36,7 +36,7 @@ func (s *ServiceWithWebSocket) ScanQR(ctx context.Context, voterID int64, req *S
 			)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -46,12 +46,12 @@ func (s *ServiceWithWebSocket) ApproveCheckin(ctx context.Context, tpsID, checki
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Broadcast approval to WebSocket clients
 	if s.wsHub != nil {
 		s.wsHub.BroadcastCheckinUpdated(tpsID, checkinID, CheckinStatusApproved)
 	}
-	
+
 	return result, nil
 }
 
@@ -61,12 +61,12 @@ func (s *ServiceWithWebSocket) RejectCheckin(ctx context.Context, tpsID, checkin
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Broadcast rejection to WebSocket clients
 	if s.wsHub != nil {
 		s.wsHub.BroadcastCheckinUpdated(tpsID, checkinID, CheckinStatusRejected)
 	}
-	
+
 	return result, nil
 }
 
@@ -76,18 +76,18 @@ func (s *ServiceWithWebSocket) MarkCheckinAsUsed(ctx context.Context, checkinID 
 	if err != nil {
 		return err
 	}
-	
+
 	checkin.Status = CheckinStatusUsed
 	err = s.repo.UpdateCheckin(ctx, checkin)
 	if err != nil {
 		return err
 	}
-	
+
 	// Broadcast status update
 	if s.wsHub != nil {
 		s.wsHub.BroadcastCheckinUpdated(checkin.TPSID, checkinID, CheckinStatusUsed)
 	}
-	
+
 	return nil
 }
 

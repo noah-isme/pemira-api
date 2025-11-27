@@ -79,7 +79,7 @@ func (r *PgRepository) CreateUserAccount(ctx context.Context, user *UserAccount)
 // GetUserByUsername retrieves a user by username
 func (r *PgRepository) GetUserByUsername(ctx context.Context, username string) (*UserAccount, error) {
 	query := `
-		SELECT id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, created_at, updated_at
+		SELECT id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, last_login_at, login_count, created_at, updated_at
 		FROM user_accounts
 		WHERE username = $1
 	`
@@ -97,6 +97,8 @@ func (r *PgRepository) GetUserByUsername(ctx context.Context, username string) (
 		&user.LecturerID,
 		&user.StaffID,
 		&user.IsActive,
+		&user.LastLoginAt,
+		&user.LoginCount,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -114,7 +116,7 @@ func (r *PgRepository) GetUserByUsername(ctx context.Context, username string) (
 // GetUserByID retrieves a user by ID
 func (r *PgRepository) GetUserByID(ctx context.Context, userID int64) (*UserAccount, error) {
 	query := `
-		SELECT id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, created_at, updated_at
+		SELECT id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, last_login_at, login_count, created_at, updated_at
 		FROM user_accounts
 		WHERE id = $1
 	`
@@ -132,6 +134,8 @@ func (r *PgRepository) GetUserByID(ctx context.Context, userID int64) (*UserAcco
 		&user.LecturerID,
 		&user.StaffID,
 		&user.IsActive,
+		&user.LastLoginAt,
+		&user.LoginCount,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -194,6 +198,20 @@ func (r *PgRepository) DeactivateUser(ctx context.Context, userID int64) error {
 	}
 
 	return nil
+}
+
+// UpdateLoginTracking updates last_login_at and increments login_count
+func (r *PgRepository) UpdateLoginTracking(ctx context.Context, userID int64) error {
+	query := `
+		UPDATE user_accounts
+		SET last_login_at = NOW(), 
+		    login_count = COALESCE(login_count, 0) + 1,
+		    updated_at = NOW()
+		WHERE id = $1
+	`
+
+	_, err := r.db.Exec(ctx, query, userID)
+	return err
 }
 
 // CreateSession creates a new user session
@@ -476,8 +494,8 @@ func (r *PgRepository) DeleteVoter(ctx context.Context, voterID int64) error {
 // CreateLecturer inserts a new lecturer record and returns its ID.
 func (r *PgRepository) CreateLecturer(ctx context.Context, lecturer LecturerRegistration) (int64, error) {
 	query := `
-		INSERT INTO lecturers (nidn, name, email, faculty_name, department_name, position)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO lecturers (nidn, name, email, faculty_name, department_name, position, unit_id, position_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 
@@ -489,6 +507,8 @@ func (r *PgRepository) CreateLecturer(ctx context.Context, lecturer LecturerRegi
 		lecturer.FacultyName,
 		lecturer.DepartmentName,
 		lecturer.Position,
+		lecturer.UnitID,
+		lecturer.PositionID,
 	).Scan(&id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_lecturers_nidn" {
@@ -509,8 +529,8 @@ func (r *PgRepository) DeleteLecturer(ctx context.Context, lecturerID int64) err
 // CreateStaff inserts a new staff record and returns its ID.
 func (r *PgRepository) CreateStaff(ctx context.Context, staff StaffRegistration) (int64, error) {
 	query := `
-		INSERT INTO staff_members (nip, name, email, unit_name, position, employment_status)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO staff_members (nip, name, email, unit_name, position, employment_status, unit_id, position_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 
@@ -522,6 +542,8 @@ func (r *PgRepository) CreateStaff(ctx context.Context, staff StaffRegistration)
 		staff.UnitName,
 		staff.Position,
 		staff.Status,
+		staff.UnitID,
+		staff.PositionID,
 	).Scan(&id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_staff_members_nip" {

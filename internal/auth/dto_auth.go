@@ -83,14 +83,18 @@ type LecturerRegistration struct {
 	FacultyName    string
 	DepartmentName string
 	Position       string
+	UnitID         *int64
+	PositionID     *int64
 }
 
 // StaffRegistration contains data needed to create a staff row
 type StaffRegistration struct {
-	NIP      string
-	Name     string
-	Email    string
-	UnitName string
-	Position string
-	Status   string
+	NIP        string
+	Name       string
+	Email      string
+	UnitName   string
+	Position   string
+	Status     string
+	UnitID     *int64
+	PositionID *int64
 }

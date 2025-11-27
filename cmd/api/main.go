@@ -16,13 +16,16 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"pemira-api/internal/adminuser"
 	"pemira-api/internal/auth"
 	"pemira-api/internal/candidate"
 	"pemira-api/internal/config"
 	"pemira-api/internal/dpt"
 	"pemira-api/internal/election"
+	"pemira-api/internal/electionvoter"
 	httpMiddleware "pemira-api/internal/http/middleware"
 	"pemira-api/internal/http/response"
+	"pemira-api/internal/master"
 	"pemira-api/internal/monitoring"
 	"pemira-api/internal/settings"
 	"pemira-api/internal/tps"
@@ -76,6 +79,9 @@ func main() {
 	// Settings repository
 	settingsRepo := settings.NewRepository(pool)
 
+	// Master data repository
+	masterRepo := master.NewPgxRepository(pool)
+
 	// Initialize services
 	jwtConfig := auth.JWTConfig{
 		Secret:          cfg.JWTSecret,
@@ -84,6 +90,11 @@ func main() {
 	}
 	jwtManager := auth.NewJWTManager(jwtConfig)
 	authService := auth.NewAuthService(authRepo, jwtManager, jwtConfig)
+
+	// Set master repository for auth service (for registration validation)
+	masterAdapter := auth.NewMasterRepositoryAdapter(masterRepo)
+	authService.SetMasterRepository(masterAdapter)
+
 	electionService := election.NewService(electionRepo, electionAdminRepo)
 	electionAdminService := election.NewAdminService(electionAdminRepo)
 	dptService := dpt.NewService(dptRepo)
@@ -106,6 +117,11 @@ func main() {
 
 	voterProfileService := voter.NewService(voterProfileRepo, voterAuthRepo)
 	settingsService := settings.NewService(settingsRepo)
+	electionVoterRepo := electionvoter.NewPgRepository(pool)
+	electionVoterService := electionvoter.NewService(electionVoterRepo)
+	adminUserRepo := adminuser.NewPgRepository(pool)
+	adminUserService := adminuser.NewService(adminUserRepo)
+	masterService := master.NewService(masterRepo)
 
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
@@ -121,6 +137,9 @@ func main() {
 	monitoringHandler := monitoring.NewHandler(monitoringService)
 	voterProfileHandler := voter.NewProfileHandler(voterProfileService)
 	settingsHandler := settings.NewHandler(settingsService)
+	electionVoterHandler := electionvoter.NewHandler(electionVoterService)
+	adminUserHandler := adminuser.NewHandler(adminUserService)
+	masterHandler := master.NewHandler(masterService)
 
 	logger.Info("services initialized successfully")
 
@@ -165,7 +184,13 @@ func main() {
 		})
 
 		// Metadata for dropdowns
-		r.Get("/meta/faculties-programs", authHandler.GetFacultyPrograms)
+		r.Get("/meta/faculties-programs", masterHandler.GetFacultyPrograms)
+		r.Get("/master/faculties", masterHandler.GetFaculties)
+		r.Get("/master/study-programs", masterHandler.GetStudyPrograms)
+		r.Get("/master/lecturer-units", masterHandler.GetLecturerUnits)
+		r.Get("/master/lecturer-positions", masterHandler.GetLecturerPositions)
+		r.Get("/master/staff-units", masterHandler.GetStaffUnits)
+		r.Get("/master/staff-positions", masterHandler.GetStaffPositions)
 
 		// Auth routes (public)
 		r.Post("/auth/register/student", authHandler.RegisterStudent)
@@ -197,6 +222,10 @@ func main() {
 			// Election routes (authenticated)
 			r.Get("/elections/{electionID}/me/status", electionHandler.GetMeStatus)
 			r.Get("/elections/{electionID}/me/history", electionHandler.GetMeHistory)
+
+			// Election-specific voter enrollment (self-service)
+			r.Post("/voters/me/elections/{electionID}/register", electionVoterHandler.VoterSelfRegister)
+			r.Get("/voters/me/elections/{electionID}/status", electionVoterHandler.VoterStatus)
 
 			// Voter TPS QR (student/admin)
 			r.Get("/voters/{voterID}/tps/qr", votingHandler.GetVoterTPSQR)
@@ -265,7 +294,13 @@ func main() {
 						r.Get("/{tpsID}/operators", tpsHandler.AdminListOperators)
 						r.Post("/{tpsID}/operators", tpsHandler.AdminCreateOperator)
 						r.Delete("/{tpsID}/operators/{userID}", tpsHandler.AdminDeleteOperator)
+						r.Get("/{tpsID}/allocation", tpsAdminHandler.Allocation)
+						r.Get("/{tpsID}/activity", tpsAdminHandler.Activity)
 					})
+
+					// NOTE: Per-election TPS management moved to standalone route at line ~400
+					// to avoid nested path issue: /admin/elections/{electionID}/tps/{tpsID}
+					// (not /admin/elections/{electionID}/tps/{electionID}/tps/{tpsID})
 
 					// Candidate management
 					r.Route("/{electionID}/candidates", func(r chi.Router) {
@@ -280,11 +315,16 @@ func main() {
 
 					// DPT management
 					r.Post("/{electionID}/voters/import", dptHandler.Import)
-					r.Get("/{electionID}/voters", dptHandler.List)
-					r.Get("/{electionID}/voters/export", dptHandler.Export)
-					r.Get("/{electionID}/voters/{voterID}", dptHandler.Get)
-					r.Put("/{electionID}/voters/{voterID}", dptHandler.Update)
-					r.Delete("/{electionID}/voters/{voterID}", dptHandler.Delete)
+					r.Route("/{electionID}/voters", func(r chi.Router) {
+						r.Get("/", electionVoterHandler.AdminList)
+						r.Post("/", electionVoterHandler.AdminUpsert)
+						r.Get("/lookup", electionVoterHandler.AdminLookup)
+						r.Patch("/{voterID}", electionVoterHandler.AdminPatch)
+						r.Get("/export", dptHandler.Export)
+						r.Get("/{voterID}", dptHandler.Get)
+						r.Put("/{voterID}", dptHandler.Update)
+						r.Delete("/{voterID}", dptHandler.Delete)
+					})
 
 					// TPS monitoring per election
 					r.Get("/{electionID}/tps/monitor", tpsAdminHandler.Monitor)
@@ -303,6 +343,18 @@ func main() {
 				// Global voters endpoint
 				r.Route("/admin/voters", func(r chi.Router) {
 					r.Get("/", dptHandler.ListAll)
+				})
+
+				// Admin user management
+				r.Route("/admin/users", func(r chi.Router) {
+					r.Get("/", adminUserHandler.List)
+					r.Post("/", adminUserHandler.Create)
+					r.Get("/{userID}", adminUserHandler.Detail)
+					r.Patch("/{userID}", adminUserHandler.Update)
+					r.Post("/{userID}/reset-password", adminUserHandler.ResetPassword)
+					r.Post("/{userID}/activate", adminUserHandler.Activate)
+					r.Post("/{userID}/deactivate", adminUserHandler.Deactivate)
+					r.Delete("/{userID}", adminUserHandler.Delete)
 				})
 
 				// App Settings
@@ -332,6 +384,10 @@ func main() {
 					r.Get("/{tpsID}/operators", tpsAdminHandler.ListOperators)
 					r.Post("/{tpsID}/operators", tpsAdminHandler.CreateOperator)
 					r.Delete("/{tpsID}/operators/{userID}", tpsAdminHandler.RemoveOperator)
+
+					// Allocation & activity
+					r.Get("/{tpsID}/allocation", tpsAdminHandler.Allocation)
+					r.Get("/{tpsID}/activity", tpsAdminHandler.Activity)
 				})
 
 			})
@@ -340,12 +396,21 @@ func main() {
 			r.Route("/admin/elections/{electionID}/tps/{tpsID}", func(r chi.Router) {
 				r.Use(httpMiddleware.AuthAdminOrTPSOperator(jwtManager))
 				r.Get("/dashboard", tpsPanelHandler.Dashboard)
+				r.Get("/stats", tpsPanelHandler.Stats)
 				r.Get("/status", tpsPanelHandler.Status)
 				r.Get("/checkins", tpsPanelHandler.ListCheckins)
 				r.Get("/checkins/{checkinId}", tpsPanelHandler.GetCheckin)
 				r.Post("/checkin/scan", tpsPanelHandler.ScanCheckin)
 				r.Post("/checkin/manual", tpsPanelHandler.ManualCheckin)
 				r.Get("/stats/timeline", tpsPanelHandler.Timeline)
+				r.Get("/logs", tpsPanelHandler.Logs)
+				
+				// Admin-only TPS management endpoints
+				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Get("/operators", tpsHandler.AdminListOperators)
+				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Post("/operators", tpsHandler.AdminCreateOperator)
+				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Delete("/operators/{userID}", tpsHandler.AdminDeleteOperator)
+				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Get("/allocation", tpsAdminHandler.Allocation)
+				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Get("/activity", tpsAdminHandler.Activity)
 			})
 
 			r.Group(func(r chi.Router) {

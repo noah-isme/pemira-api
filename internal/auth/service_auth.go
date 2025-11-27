@@ -19,8 +19,48 @@ var (
 	ErrModeNotAvailable    = errors.New("voting mode not available")
 )
 
+type MasterRepository interface {
+	GetFacultyByName(ctx context.Context, name string) (*MasterFaculty, error)
+	GetStudyProgramByName(ctx context.Context, facultyID int64, name string) (*MasterStudyProgram, error)
+	GetLecturerUnitByName(ctx context.Context, name string) (*MasterLecturerUnit, error)
+	GetLecturerPositionByName(ctx context.Context, name string) (*MasterLecturerPosition, error)
+	GetStaffUnitByName(ctx context.Context, name string) (*MasterStaffUnit, error)
+	GetStaffPositionByName(ctx context.Context, name string) (*MasterStaffPosition, error)
+}
+
+type MasterFaculty struct {
+	ID   int64
+	Name string
+}
+
+type MasterStudyProgram struct {
+	ID   int64
+	Name string
+}
+
+type MasterLecturerUnit struct {
+	ID   int64
+	Name string
+}
+
+type MasterLecturerPosition struct {
+	ID   int64
+	Name string
+}
+
+type MasterStaffUnit struct {
+	ID   int64
+	Name string
+}
+
+type MasterStaffPosition struct {
+	ID   int64
+	Name string
+}
+
 type AuthService struct {
 	repo       Repository
+	masterRepo MasterRepository
 	jwtManager *JWTManager
 	config     JWTConfig
 }
@@ -31,6 +71,10 @@ func NewAuthService(repo Repository, jwtManager *JWTManager, config JWTConfig) *
 		jwtManager: jwtManager,
 		config:     config,
 	}
+}
+
+func (s *AuthService) SetMasterRepository(masterRepo MasterRepository) {
+	s.masterRepo = masterRepo
 }
 
 // RegisterStudent registers a new student account and linked voter profile.
@@ -158,6 +202,23 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			email = fmt.Sprintf("%s@pemira.ac.id", nidn)
 		}
 
+		// Lookup unit and position IDs from master tables
+		var unitID, positionID *int64
+		if s.masterRepo != nil {
+			if req.FacultyName != "" {
+				unit, err := s.masterRepo.GetLecturerUnitByName(ctx, req.FacultyName)
+				if err == nil && unit != nil {
+					unitID = &unit.ID
+				}
+			}
+			if req.Position != "" {
+				position, err := s.masterRepo.GetLecturerPositionByName(ctx, req.Position)
+				if err == nil && position != nil {
+					positionID = &position.ID
+				}
+			}
+		}
+
 		lecturerID, err := s.repo.CreateLecturer(ctx, LecturerRegistration{
 			NIDN:           nidn,
 			Name:           req.Name,
@@ -165,6 +226,8 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			FacultyName:    req.FacultyName,
 			DepartmentName: req.DepartmentName,
 			Position:       req.Position,
+			UnitID:         unitID,
+			PositionID:     positionID,
 		})
 		if err != nil {
 			return nil, err
@@ -228,13 +291,32 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			email = fmt.Sprintf("%s@pemira.ac.id", nip)
 		}
 
+		// Lookup unit and position IDs from master tables
+		var unitID, positionID *int64
+		if s.masterRepo != nil {
+			if req.UnitName != "" {
+				unit, err := s.masterRepo.GetStaffUnitByName(ctx, req.UnitName)
+				if err == nil && unit != nil {
+					unitID = &unit.ID
+				}
+			}
+			if req.Position != "" {
+				position, err := s.masterRepo.GetStaffPositionByName(ctx, req.Position)
+				if err == nil && position != nil {
+					positionID = &position.ID
+				}
+			}
+		}
+
 		staffID, err := s.repo.CreateStaff(ctx, StaffRegistration{
-			NIP:      nip,
-			Name:     req.Name,
-			Email:    email,
-			UnitName: req.UnitName,
-			Position: req.Position,
-			Status:   "ACTIVE",
+			NIP:        nip,
+			Name:       req.Name,
+			Email:      email,
+			UnitName:   req.UnitName,
+			Position:   req.Position,
+			Status:     "ACTIVE",
+			UnitID:     unitID,
+			PositionID: positionID,
 		})
 		if err != nil {
 			return nil, err
@@ -353,6 +435,9 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest, userAgent, ip
 	if err != nil {
 		return nil, err
 	}
+
+	// Update login tracking (last_login_at and login_count)
+	_ = s.repo.UpdateLoginTracking(ctx, user.ID)
 
 	// Get user profile
 	var profile *UserProfile

@@ -448,10 +448,11 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 			vs.voting_method,
 			v.voting_method,
 			vs.tps_id
-		FROM voters v
-		INNER JOIN voter_status vs ON vs.voter_id = v.id
+		FROM election_voters ev
+		INNER JOIN voters v ON v.id = ev.voter_id
+		INNER JOIN voter_status vs ON vs.voter_id = v.id AND vs.election_id = ev.election_id
 		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
-		WHERE v.id = $1 AND vs.election_id = $2
+		WHERE ev.id = $1 AND ev.election_id = $2
 	`
 
 	var item VoterWithStatusDTO

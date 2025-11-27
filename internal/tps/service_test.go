@@ -140,6 +140,18 @@ func (m *mockRepository) PanelGetCheckin(ctx context.Context, checkinID int64) (
 func (m *mockRepository) PanelTimeline(ctx context.Context, tpsID int64) ([]tps.PanelTimelineRow, error) {
 	return []tps.PanelTimelineRow{}, nil
 }
+func (m *mockRepository) PanelListTPSByElection(ctx context.Context, electionID int64) ([]tps.PanelTPSListItem, error) {
+	return []tps.PanelTPSListItem{}, nil
+}
+func (m *mockRepository) PanelLogs(ctx context.Context, tpsID int64, limit int) ([]tps.PanelLogRow, error) {
+	return []tps.PanelLogRow{}, nil
+}
+func (m *mockRepository) FindVoterByIdentifier(ctx context.Context, electionID int64, identifier string) (*tps.PanelRegistrationCode, error) {
+	return &tps.PanelRegistrationCode{ElectionID: electionID, VoterID: 1, TPSID: ptrInt64(1), Raw: identifier}, nil
+}
+func (m *mockRepository) FindRegistrationToken(ctx context.Context, token string) (*tps.PanelRegistrationCode, error) {
+	return nil, tps.ErrQRInvalid
+}
 func (m *mockRepository) GetOperatorInfo(ctx context.Context, userID int64) (*tps.OperatorInfo, error) {
 	return &tps.OperatorInfo{ID: userID}, nil
 }

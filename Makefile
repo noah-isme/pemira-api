@@ -19,7 +19,7 @@ dev:
 
 build:
 	@echo "Building application..."
-	@go build -o bin/api cmd/api/main.go
+	@go build -o build/api cmd/api/main.go
 
 test:
 	@echo "Running tests..."

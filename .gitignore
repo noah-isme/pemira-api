@@ -5,6 +5,7 @@
 *.so
 *.dylib
 /bin/
+/build/
 /cmd/api/api
 /cmd/worker/worker
 # Ignore compiled binaries in root
@@ -42,6 +43,7 @@ Thumbs.db
 
 # Logs
 *.log
+/logs/
 
 # Temporary files
 tmp/

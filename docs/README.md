@@ -180,11 +180,11 @@ make sqlc-generate
 
 ## Documentation
 
-- [Admin Election API](./ADMIN_ELECTION_API.md) - Election management endpoints
-- [Admin TPS API](./ADMIN_TPS_API.md) - TPS management endpoints
-- [DPT API](./DPT_API_DOCUMENTATION.md) - DPT management endpoints
-- [Voting API](./VOTING_API_IMPLEMENTATION.md) - Voting system implementation
-- [Auth Implementation](./AUTH_IMPLEMENTATION.md) - Authentication & authorization
+- [Admin Election API](./docs/ADMIN_ELECTION_API.md) - Election management endpoints
+- [Admin TPS API](./docs/ADMIN_TPS_API.md) - TPS management endpoints
+- [DPT API](./docs/DPT_API_DOCUMENTATION.md) - DPT management endpoints
+- [Voting API](./docs/VOTING_API_IMPLEMENTATION.md) - Voting system implementation
+- [Auth Implementation](./docs/AUTH_IMPLEMENTATION.md) - Authentication & authorization
 
 ## License
 

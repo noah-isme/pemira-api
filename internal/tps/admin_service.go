@@ -65,3 +65,11 @@ func (s *AdminService) GetQRForPrint(ctx context.Context, tpsID int64) (*TPSQRPr
 func (s *AdminService) Monitor(ctx context.Context, electionID int64) ([]TPSMonitorDTO, error) {
 	return s.repo.ListMonitorForElection(ctx, electionID)
 }
+
+func (s *AdminService) Allocation(ctx context.Context, tpsID int64) (*TPSAllocationSummary, error) {
+	return s.repo.GetAllocation(ctx, tpsID)
+}
+
+func (s *AdminService) Activity(ctx context.Context, tpsID int64) (*TPSActivitySummary, error) {
+	return s.repo.GetActivity(ctx, tpsID)
+}

@@ -71,6 +71,14 @@ type TimelinePoint struct {
 	Voted     int    `json:"voted"`
 }
 
+type PanelLog struct {
+	Type      string    `json:"type"`
+	Status    string    `json:"status"`
+	VoterName string    `json:"voter_name"`
+	VoterNIM  string    `json:"voter_nim"`
+	At        time.Time `json:"at"`
+}
+
 func (s *PanelService) derivePanelStatus(tpsRow *TPS) string {
 	now := time.Now()
 	// Default by status field
@@ -248,6 +256,28 @@ func (s *PanelService) Timeline(ctx context.Context, tpsID int64) ([]TimelinePoi
 		})
 	}
 	return resp, nil
+}
+
+func (s *PanelService) Stats(ctx context.Context, tpsID int64) (*PanelDashboard, error) {
+	return s.Dashboard(ctx, tpsID)
+}
+
+func (s *PanelService) Logs(ctx context.Context, tpsID int64, limit int) ([]PanelLog, error) {
+	rows, err := s.repo.PanelLogs(ctx, tpsID, limit)
+	if err != nil {
+		return nil, err
+	}
+	logs := make([]PanelLog, 0, len(rows))
+	for _, r := range rows {
+		logs = append(logs, PanelLog{
+			Type:      r.Type,
+			Status:    r.Status,
+			VoterName: r.VoterName,
+			VoterNIM:  r.VoterNIM,
+			At:        r.At,
+		})
+	}
+	return logs, nil
 }
 
 func (s *PanelService) ListTPSByElection(ctx context.Context, electionID int64) ([]PanelTPSListItem, error) {

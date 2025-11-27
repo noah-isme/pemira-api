@@ -19,6 +19,8 @@ type UserAccount struct {
 	LecturerID   *int64         `json:"lecturer_id,omitempty"`
 	StaffID      *int64         `json:"staff_id,omitempty"`
 	IsActive     bool           `json:"is_active"`
+	LastLoginAt  *time.Time     `json:"last_login_at,omitempty"`
+	LoginCount   int            `json:"login_count"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 }

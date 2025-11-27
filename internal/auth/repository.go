@@ -22,6 +22,7 @@ type Repository interface {
 	GetUserByID(ctx context.Context, userID int64) (*UserAccount, error)
 	UpdateUserAccount(ctx context.Context, user *UserAccount) error
 	DeactivateUser(ctx context.Context, userID int64) error
+	UpdateLoginTracking(ctx context.Context, userID int64) error
 
 	// Session operations
 	CreateSession(ctx context.Context, session *UserSession) (*UserSession, error)

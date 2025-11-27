@@ -1,3 +1,4 @@
+-- +goose Up
 -- Migration: Add app settings table
 -- Created: 2025-11-26
 
@@ -5,8 +6,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
     key VARCHAR(100) PRIMARY KEY,
     value TEXT NOT NULL,
     description TEXT,
-    updated_at TIMESTAMP DEFAULT NOW(),
-    updated_by INT REFERENCES user_accounts(id)
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_by BIGINT REFERENCES user_accounts(id)
 );
 
 -- Insert default active election
@@ -18,3 +19,6 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Create index
 CREATE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key);
+
+-- +goose Down
+DROP TABLE IF EXISTS app_settings;

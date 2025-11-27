@@ -714,8 +714,8 @@ func (r *PostgresRepository) PanelDashboardStats(ctx context.Context, tpsID, ele
 	if err := r.db.QueryRowContext(ctx, `
 		SELECT COUNT(*) 
 		FROM voter_status 
-		WHERE election_id = $1 AND COALESCE(tps_allowed, true) = true
-	`, electionID).Scan(&stats.TotalRegistered); err != nil {
+		WHERE election_id = $1 AND (tps_id = $2 OR tps_id IS NULL)
+	`, electionID, tpsID).Scan(&stats.TotalRegistered); err != nil {
 		return nil, err
 	}
 
@@ -730,8 +730,8 @@ func (r *PostgresRepository) PanelDashboardStats(ctx context.Context, tpsID, ele
 	if err := r.db.QueryRowContext(ctx, `
 		SELECT COUNT(*) 
 		FROM votes 
-		WHERE tps_id = $1
-	`, tpsID).Scan(&stats.TotalVoted); err != nil {
+		WHERE tps_id = $1 AND election_id = $2
+	`, tpsID, electionID).Scan(&stats.TotalVoted); err != nil {
 		return nil, err
 	}
 
@@ -872,6 +872,54 @@ func (r *PostgresRepository) PanelTimeline(ctx context.Context, tpsID int64) ([]
 	return list, nil
 }
 
+func (r *PostgresRepository) PanelLogs(ctx context.Context, tpsID int64, limit int) ([]PanelLogRow, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	query := `
+		SELECT * FROM (
+			SELECT 
+				'CHECKIN' AS type,
+				c.status AS status,
+				COALESCE(v.name, '') AS voter_name,
+				COALESCE(v.nim, '') AS voter_nim,
+				COALESCE(c.approved_at, c.scan_at) AS at_ts
+			FROM tps_checkins c
+			JOIN voters v ON v.id = c.voter_id
+			WHERE c.tps_id = $1
+			UNION ALL
+			SELECT 
+				'CHECKIN' AS type,
+				'REJECTED' AS status,
+				COALESCE(v.name, '') AS voter_name,
+				COALESCE(v.nim, '') AS voter_nim,
+				c.scan_at AS at_ts
+			FROM tps_checkins c
+			JOIN voters v ON v.id = c.voter_id
+			WHERE c.tps_id = $1 AND c.status = 'REJECTED'
+		) logs
+		ORDER BY at_ts DESC
+		LIMIT $2
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tpsID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []PanelLogRow
+	for rows.Next() {
+		var row PanelLogRow
+		if err := rows.Scan(&row.Type, &row.Status, &row.VoterName, &row.VoterNIM, &row.At); err != nil {
+			return nil, err
+		}
+		list = append(list, row)
+	}
+
+	return list, rows.Err()
+}
+
 func (r *PostgresRepository) PanelListTPSByElection(ctx context.Context, electionID int64) ([]PanelTPSListItem, error) {
 	query := `
 		SELECT t.id, t.code, t.name, t.location, t.status, t.open_time, t.close_time, t.capacity_estimate
@@ -960,6 +1008,70 @@ func (r *PostgresRepository) ParseRegistrationCode(ctx context.Context, raw stri
 		VoterID:    voterID,
 		TPSID:      tpsID,
 		Raw:        raw,
+	}, nil
+}
+
+func (r *PostgresRepository) FindVoterByIdentifier(ctx context.Context, electionID int64, identifier string) (*PanelRegistrationCode, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil, ErrQRInvalid
+	}
+	var voterID int64
+	var tpsID *int64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT vs.voter_id, vs.tps_id
+		FROM voter_status vs
+		JOIN voters v ON v.id = vs.voter_id
+		LEFT JOIN lecturers l ON l.id = v.lecturer_id
+		LEFT JOIN staff_members s ON s.id = v.staff_id
+		WHERE vs.election_id = $1
+		  AND (
+			v.nim = $2
+			OR l.nidn = $2
+			OR s.nip = $2
+		  )
+		LIMIT 1
+	`, electionID, identifier).Scan(&voterID, &tpsID)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotEligible
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &PanelRegistrationCode{
+		ElectionID: electionID,
+		VoterID:    voterID,
+		TPSID:      tpsID,
+		Raw:        identifier,
+	}, nil
+}
+
+func (r *PostgresRepository) FindRegistrationToken(ctx context.Context, token string) (*PanelRegistrationCode, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, ErrQRInvalid
+	}
+	var electionID, voterID int64
+	var tpsID *int64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT election_id, voter_id, tps_id
+		FROM registration_tokens
+		WHERE token = $1
+		  AND (expires_at IS NULL OR expires_at > NOW())
+		  AND used_at IS NULL
+		LIMIT 1
+	`, token).Scan(&electionID, &voterID, &tpsID)
+	if err == sql.ErrNoRows {
+		return nil, ErrQRInvalid
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &PanelRegistrationCode{
+		ElectionID: electionID,
+		VoterID:    voterID,
+		TPSID:      tpsID,
+		Raw:        token,
 	}, nil
 }
 

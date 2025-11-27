@@ -1,21 +1,22 @@
 openapi: 3.0.3
 info:
-  title: PEMIRA Voting API
+  title: PEMIRA API
   description: |
-    API untuk modul voting dalam sistem PEMIRA (Pemilihan Raya Mahasiswa).
-    
-    ## Fitur Utama
-    - Voting Online langsung dari dashboard
-    - Voting via TPS setelah check-in disetujui
-    - Validasi ketat untuk mencegah double voting
-    - Transaction-based dengan row-level locks
-    - Anonymous vote tokens sebagai receipt
-    
+    Complete API untuk sistem PEMIRA (Pemilihan Raya Mahasiswa) Universitas.
+
+    ## Modul API
+    - **Admin Election Management**: CRUD pemilu, kontrol status voting
+    - **Admin TPS Management**: Manajemen TPS dan operator
+    - **DPT Management**: Manajemen Daftar Pemilih Tetap
+    - **Voting System**: Voting online dan TPS dengan validasi ketat
+    - **Authentication**: Login untuk Student, Admin, Panitia
+    - **Public Endpoints**: Informasi pemilu untuk umum
+
     ## Keamanan
-    - Semua endpoint memerlukan JWT authentication
-    - Role STUDENT wajib untuk semua operasi voting
-    - Rate limiting: 3 requests per minute untuk cast vote
-    - Audit logging untuk semua operasi voting
+    - JWT authentication untuk protected endpoints
+    - Role-based access control (STUDENT, ADMIN, PANITIA, SUPER_ADMIN)
+    - Rate limiting dan audit logging
+    - Transaction safety untuk operasi voting
   version: 1.0.0
   contact:
     name: PEMIRA API Support
@@ -31,10 +32,20 @@ security:
   - BearerAuth: []
 
 tags:
+  - name: Admin Elections
+    description: Election management for administrators
+  - name: Admin TPS
+    description: TPS (Tempat Pemungutan Suara) management
+  - name: Admin DPT
+    description: DPT (Daftar Pemilih Tetap) management
   - name: Voting
-    description: Operasi voting online dan TPS
+    description: Voting operations (online and TPS)
   - name: Receipt
-    description: Bukti voting dan status
+    description: Vote receipts and verification
+  - name: Public
+    description: Public endpoints (no authentication required)
+  - name: Authentication
+    description: User authentication and authorization
 
 paths:
   /voting/config:
@@ -379,6 +390,937 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  # Admin Election Management
+  /admin/elections:
+    get:
+      tags:
+        - Admin Elections
+      summary: List all elections
+      description: Get paginated list of elections with optional filters
+      operationId: listElections
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+          description: Filter by election year
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, REGISTRATION, CAMPAIGN, VOTING_OPEN, CLOSED, ARCHIVED]
+          description: Filter by election status
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by election name or slug
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Election'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Admin Elections
+      summary: Create new election
+      description: Create a new election with DRAFT status
+      operationId: createElection
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - year
+                - name
+                - slug
+                - online_enabled
+                - tps_enabled
+              properties:
+                year:
+                  type: integer
+                  example: 2024
+                name:
+                  type: string
+                  example: "Pemilu Raya 2024"
+                slug:
+                  type: string
+                  example: "pemira-2024"
+                online_enabled:
+                  type: boolean
+                  example: true
+                tps_enabled:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Election created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/elections/{electionID}:
+    get:
+      tags:
+        - Admin Elections
+      summary: Get election details
+      description: Get detailed information about a specific election
+      operationId: getElection
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+      responses:
+        '200':
+          description: Election details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '404':
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Admin Elections
+      summary: Update election
+      description: Update election information (partial update)
+      operationId: updateElection
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                year:
+                  type: integer
+                  example: 2024
+                name:
+                  type: string
+                  example: "Pemilu Raya 2024 (Updated)"
+                slug:
+                  type: string
+                  example: "pemira-2024-v2"
+                online_enabled:
+                  type: boolean
+                  example: false
+                tps_enabled:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Election updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '404':
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/elections/{electionID}/open-voting:
+    post:
+      tags:
+        - Admin Elections
+      summary: Open voting for election
+      description: Start the voting period for an election
+      operationId: openVoting
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - voting_start_at
+              properties:
+                voting_start_at:
+                  type: string
+                  format: date-time
+                  example: "2024-03-01T00:00:00Z"
+                voting_end_at:
+                  type: string
+                  format: date-time
+                  example: "2024-03-01T23:59:59Z"
+      responses:
+        '200':
+          description: Voting opened successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '400':
+          description: Invalid request or election status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/elections/{electionID}/close-voting:
+    post:
+      tags:
+        - Admin Elections
+      summary: Close voting for election
+      description: End the voting period for an election
+      operationId: closeVoting
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+      responses:
+        '200':
+          description: Voting closed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '400':
+          description: Invalid request or election status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Admin TPS Management
+  /admin/tps:
+    get:
+      tags:
+        - Admin TPS
+      summary: List all TPS
+      description: Get list of all TPS locations
+      operationId: listTPS
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of TPS
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TPS'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Admin TPS
+      summary: Create new TPS
+      description: Create a new TPS location
+      operationId: createTPS
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+                - name
+                - location
+                - capacity
+              properties:
+                code:
+                  type: string
+                  example: "TPS01"
+                name:
+                  type: string
+                  example: "TPS Aula Utama"
+                location:
+                  type: string
+                  example: "Gedung A Lantai 1"
+                capacity:
+                  type: integer
+                  example: 500
+                open_time:
+                  type: string
+                  example: "08:00"
+                close_time:
+                  type: string
+                  example: "15:00"
+                pic_name:
+                  type: string
+                  example: "John Doe"
+                pic_phone:
+                  type: string
+                  example: "+62812345678"
+      responses:
+        '201':
+          description: TPS created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TPS'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/tps/{tpsID}:
+    get:
+      tags:
+        - Admin TPS
+      summary: Get TPS details
+      description: Get detailed information about a specific TPS
+      operationId: getTPS
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tpsID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: TPS ID
+      responses:
+        '200':
+          description: TPS details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TPS'
+        '404':
+          description: TPS not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - Admin TPS
+      summary: Update TPS
+      description: Update TPS information
+      operationId: updateTPS
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tpsID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: TPS ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  example: "TPS01"
+                name:
+                  type: string
+                  example: "TPS Aula Utama"
+                location:
+                  type: string
+                  example: "Gedung A Lantai 1"
+                capacity:
+                  type: integer
+                  example: 500
+                is_active:
+                  type: boolean
+                  example: true
+                open_time:
+                  type: string
+                  example: "08:00"
+                close_time:
+                  type: string
+                  example: "15:00"
+                pic_name:
+                  type: string
+                  example: "John Doe"
+                pic_phone:
+                  type: string
+                  example: "+62812345678"
+      responses:
+        '200':
+          description: TPS updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TPS'
+        '404':
+          description: TPS not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - Admin TPS
+      summary: Delete TPS
+      description: Delete a TPS location
+      operationId: deleteTPS
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tpsID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: TPS ID
+      responses:
+        '204':
+          description: TPS deleted successfully
+        '404':
+          description: TPS not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/tps/{tpsID}/qr:
+    get:
+      tags:
+        - Admin TPS
+      summary: Get TPS QR code
+      description: Get QR code data for TPS check-in
+      operationId: getTPSQR
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tpsID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: TPS ID
+      responses:
+        '200':
+          description: QR code data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qr_code:
+                    type: string
+                    description: Base64 encoded QR code image
+                  qr_data:
+                    type: string
+                    description: QR code content/data
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: QR code expiration time
+        '404':
+          description: TPS not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/tps/{tpsID}/qr/rotate:
+    post:
+      tags:
+        - Admin TPS
+      summary: Rotate TPS QR code
+      description: Generate new QR code for TPS (invalidates old one)
+      operationId: rotateTPSQR
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tpsID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: TPS ID
+      responses:
+        '200':
+          description: New QR code generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qr_code:
+                    type: string
+                    description: Base64 encoded QR code image
+                  qr_data:
+                    type: string
+                    description: QR code content/data
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: QR code expiration time
+        '404':
+          description: TPS not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Admin DPT Management
+  /admin/elections/{electionID}/voters:
+    get:
+      tags:
+        - Admin DPT
+      summary: List voters for election
+      description: Get paginated list of voters for a specific election with filters
+      operationId: listVoters
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+        - name: faculty
+          in: query
+          schema:
+            type: string
+          description: Filter by faculty name
+        - name: study_program
+          in: query
+          schema:
+            type: string
+          description: Filter by study program
+        - name: cohort_year
+          in: query
+          schema:
+            type: integer
+          description: Filter by cohort year
+        - name: has_voted
+          in: query
+          schema:
+            type: boolean
+          description: Filter by voting status
+        - name: eligible
+          in: query
+          schema:
+            type: boolean
+          description: Filter by eligibility
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by NIM or name
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Items per page
+      responses:
+        '200':
+          description: List of voters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Voter'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/elections/{electionID}/voters/import:
+    post:
+      tags:
+        - Admin DPT
+      summary: Import voters from CSV
+      description: Import voter data from CSV file for election
+      operationId: importVoters
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file containing voter data
+      responses:
+        '200':
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  imported_count:
+                    type: integer
+                    example: 1500
+                  errors:
+                    type: array
+                    items:
+                      type: string
+                    example: []
+        '400':
+          description: Invalid CSV format or data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/elections/{electionID}/voters/export:
+    get:
+      tags:
+        - Admin DPT
+      summary: Export voters to CSV
+      description: Export voter data to CSV file
+      operationId: exportVoters
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+        - name: faculty
+          in: query
+          schema:
+            type: string
+          description: Filter by faculty name
+        - name: study_program
+          in: query
+          schema:
+            type: string
+          description: Filter by study program
+        - name: cohort_year
+          in: query
+          schema:
+            type: integer
+          description: Filter by cohort year
+        - name: has_voted
+          in: query
+          schema:
+            type: boolean
+          description: Filter by voting status
+        - name: eligible
+          in: query
+          schema:
+            type: boolean
+          description: Filter by eligibility
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by NIM or name
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+              example: "nim,name,faculty_name,study_program_name,cohort_year,email,phone,has_voted,voting_method,voted_at\n22012345,Budi Setiawan,Fakultas Teknik,Informatika,2021,budi@uniwa.ac.id,+62812345678,true,ONLINE,2024-03-01T10:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Public Endpoints (No Authentication Required)
+  /elections/current:
+    get:
+      tags:
+        - Public
+      summary: Get current active election
+      description: Get information about the currently active election
+      operationId: getCurrentElection
+      responses:
+        '200':
+          description: Current active election
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Election'
+        '404':
+          description: No active election found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "ELECTION_NOT_FOUND"
+                  message:
+                    type: string
+                    example: "Tidak ada pemilu yang sedang berlangsung."
+
+  /elections/{electionID}/phases:
+    get:
+      tags:
+        - Public
+      summary: Get election phases/timeline
+      description: Get the timeline and phases of an election
+      operationId: getElectionPhases
+      parameters:
+        - name: electionID
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Election ID
+      responses:
+        '200':
+          description: Election phases and timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  election_id:
+                    type: integer
+                    example: 1
+                  phases:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        phase:
+                          type: string
+                          enum: [REGISTRATION, CAMPAIGN, VOTING_OPEN, CLOSED]
+                          example: "REGISTRATION"
+                        start_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                          example: "2024-02-01T00:00:00Z"
+                        end_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                          example: "2024-02-29T23:59:59Z"
+                        is_active:
+                          type: boolean
+                          example: false
+        '404':
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Authentication Endpoints
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and get access tokens
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: "student123"
+                password:
+                  type: string
+                  format: password
+                  example: "password"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    example: "eyJhbGc..."
+                  refresh_token:
+                    type: string
+                    example: "random-token-base64"
+                  token_type:
+                    type: string
+                    example: "Bearer"
+                  expires_in:
+                    type: integer
+                    example: 900
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user info
+      description: Get information about the currently authenticated user
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -706,6 +1648,215 @@ components:
               type: object
               nullable: true
               example: null
+
+    # Admin Election Schemas
+    Election:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        year:
+          type: integer
+          example: 2024
+        name:
+          type: string
+          example: "Pemilu Raya 2024"
+        slug:
+          type: string
+          example: "pemira-2024"
+        status:
+          type: string
+          enum: [DRAFT, REGISTRATION, CAMPAIGN, VOTING_OPEN, CLOSED, ARCHIVED]
+          example: "VOTING_OPEN"
+        voting_start_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-01T00:00:00Z"
+        voting_end_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-01T23:59:59Z"
+        online_enabled:
+          type: boolean
+          example: true
+        tps_enabled:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-03-01T00:00:00Z"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total_items:
+          type: integer
+          example: 150
+        total_pages:
+          type: integer
+          example: 8
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "year, name, dan slug wajib diisi."
+
+    TPS:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: "TPS01"
+        name:
+          type: string
+          example: "TPS Aula Utama"
+        location:
+          type: string
+          example: "Gedung A Lantai 1"
+        capacity:
+          type: integer
+          example: 500
+        is_active:
+          type: boolean
+          example: true
+        open_time:
+          type: string
+          example: "08:00"
+        close_time:
+          type: string
+          example: "15:00"
+        pic_name:
+          type: string
+          example: "John Doe"
+        pic_phone:
+          type: string
+          example: "+62812345678"
+        has_active_qr:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:00:00Z"
+
+    Voter:
+      type: object
+      properties:
+        voter_id:
+          type: integer
+          example: 123
+        nim:
+          type: string
+          example: "22012345"
+        name:
+          type: string
+          example: "Budi Setiawan"
+        faculty_name:
+          type: string
+          example: "Fakultas Teknik"
+        study_program_name:
+          type: string
+          example: "Informatika"
+        cohort_year:
+          type: integer
+          example: 2021
+        email:
+          type: string
+          nullable: true
+          example: "budi@uniwa.ac.id"
+        phone:
+          type: string
+          nullable: true
+          example: "+62812345678"
+        has_account:
+          type: boolean
+          example: true
+        status:
+          type: object
+          properties:
+            is_eligible:
+              type: boolean
+              example: true
+            has_voted:
+              type: boolean
+              example: false
+            last_vote_at:
+              type: string
+              format: date-time
+              nullable: true
+              example: null
+            last_vote_channel:
+              type: string
+              enum: [ONLINE, TPS]
+              nullable: true
+              example: null
+            last_tps_id:
+              type: integer
+              nullable: true
+              example: null
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: "student123"
+        role:
+          type: string
+          enum: [STUDENT, ADMIN, PANITIA, SUPER_ADMIN]
+          example: "STUDENT"
+        voter_id:
+          type: integer
+          nullable: true
+          example: 123
+        profile:
+          type: object
+          nullable: true
+          properties:
+            name:
+              type: string
+              example: "John Doe"
+            faculty_name:
+              type: string
+              example: "Fakultas Teknik"
+            study_program_name:
+              type: string
+              example: "Teknik Informatika"
+            cohort_year:
+              type: integer
+              example: 2020
 
   responses:
     Unauthorized:

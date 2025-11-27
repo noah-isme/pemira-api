@@ -391,28 +391,36 @@ func (r *PgAdminRepository) CreateOperator(
 	}
 	passwordHash := string(hashBytes)
 
+	if strings.TrimSpace(name) == "" {
+		name = username
+	}
+	if strings.TrimSpace(email) == "" {
+		email = fmt.Sprintf("%s@pemira.local", username)
+	}
+
 	const q = `
 INSERT INTO user_accounts (
     username,
+    email,
+    full_name,
     password_hash,
     role,
     tps_id,
     is_active
-) VALUES ($1, $2, 'TPS_OPERATOR', $3, TRUE)
-RETURNING id, username
+) VALUES ($1, $2, $3, $4, 'TPS_OPERATOR', $5, TRUE)
+RETURNING id, username, full_name, email
 `
 	var dto TPSOperatorDTO
 	err = r.db.QueryRow(ctx, q,
 		username,
+		email,
+		name,
 		passwordHash,
 		tpsID,
-	).Scan(&dto.UserID, &dto.Username)
+	).Scan(&dto.UserID, &dto.Username, &dto.Name, &dto.Email)
 	if err != nil {
 		return nil, err
 	}
-
-	dto.Name = name
-	dto.Email = email
 
 	return &dto, nil
 }
@@ -425,6 +433,123 @@ WHERE id = $1 AND tps_id = $2 AND role = 'TPS_OPERATOR'
 `
 	_, err := r.db.Exec(ctx, q, userID, tpsID)
 	return err
+}
+
+// GetAllocation returns allocation summary for a TPS
+func (r *PgAdminRepository) GetAllocation(ctx context.Context, tpsID int64) (*TPSAllocationSummary, error) {
+	var electionID int64
+	if err := r.db.QueryRow(ctx, `SELECT election_id FROM tps WHERE id = $1`, tpsID).Scan(&electionID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTPSNotFound
+		}
+		return nil, err
+	}
+
+	summary := TPSAllocationSummary{}
+	err := r.db.QueryRow(ctx, `
+		WITH vs AS (
+			SELECT has_voted
+			FROM voter_status
+			WHERE election_id = $1 AND tps_id = $2
+		)
+		SELECT 
+			COUNT(*) AS total,
+			COUNT(*) AS allocated,
+			COUNT(*) FILTER (WHERE has_voted = TRUE) AS voted
+		FROM vs
+	`, electionID, tpsID).Scan(&summary.TotalElectionVoters, &summary.AllocatedToThisTPS, &summary.Voted)
+	if err != nil {
+		return nil, err
+	}
+	summary.NotVoted = summary.AllocatedToThisTPS - summary.Voted
+	if summary.NotVoted < 0 {
+		summary.NotVoted = 0
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT v.id, COALESCE(v.nim,''), v.name, vs.has_voted, vs.voted_at
+		FROM voter_status vs
+		JOIN voters v ON v.id = vs.voter_id
+		WHERE vs.election_id = $1 AND vs.tps_id = $2
+		ORDER BY v.nim
+		LIMIT 100
+	`, electionID, tpsID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var v TPSAllocationVoter
+		if err := rows.Scan(&v.VoterID, &v.NIM, &v.Name, &v.HasVoted, &v.VotedAt); err != nil {
+			return nil, err
+		}
+		summary.Voters = append(summary.Voters, v)
+	}
+
+	return &summary, rows.Err()
+}
+
+// GetActivity returns activity summary and timeline for TPS
+func (r *PgAdminRepository) GetActivity(ctx context.Context, tpsID int64) (*TPSActivitySummary, error) {
+	var electionID int64
+	if err := r.db.QueryRow(ctx, `SELECT election_id FROM tps WHERE id = $1`, tpsID).Scan(&electionID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTPSNotFound
+		}
+		return nil, err
+	}
+
+	summary := TPSActivitySummary{}
+
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) 
+		FROM tps_checkins 
+		WHERE tps_id = $1 AND scan_at::date = CURRENT_DATE
+	`, tpsID).Scan(&summary.CheckinsToday); err != nil {
+		return nil, err
+	}
+
+	if err := r.db.QueryRow(ctx, `
+		SELECT 
+			COUNT(*) FILTER (WHERE has_voted = TRUE) AS voted,
+			COUNT(*) AS total
+		FROM voter_status
+		WHERE election_id = $1 AND tps_id = $2
+	`, electionID, tpsID).Scan(&summary.Voted, &summary.NotVoted); err != nil {
+		return nil, err
+	}
+	summary.NotVoted = summary.NotVoted - summary.Voted
+	if summary.NotVoted < 0 {
+		summary.NotVoted = 0
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT 
+			to_char(date_trunc('hour', scan_at), 'YYYY-MM-DD"T"HH24:00:00Z') AS bucket,
+			COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE status IN ('APPROVED','USED','VOTED')) AS approved,
+			COUNT(*) FILTER (WHERE status IN ('USED','VOTED')) AS voted
+		FROM tps_checkins
+		WHERE tps_id = $1
+		  AND scan_at >= NOW() - INTERVAL '24 hour'
+		GROUP BY 1
+		ORDER BY 1
+	`, tpsID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tl TPSActivityTimeline
+		if err := rows.Scan(&tl.Hour, &tl.Total, &tl.Approved, &tl.Voted); err != nil {
+			return nil, err
+		}
+		summary.Timeline = append(summary.Timeline, tl)
+	}
+
+	return &summary, rows.Err()
 }
 
 // ListMonitorForElection returns monitoring data for all TPS in an election

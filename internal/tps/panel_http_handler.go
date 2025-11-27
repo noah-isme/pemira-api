@@ -251,6 +251,8 @@ func (h *PanelHandler) handleCheckin(w http.ResponseWriter, r *http.Request, use
 	var payload struct {
 		RegistrationQRPayload string `json:"registration_qr_payload"`
 		RegistrationCode      string `json:"registration_code"`
+		QRToken               string `json:"qr_token"` // alias for registration code
+		NIM                   string `json:"nim"`      // manual identifier
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
@@ -261,16 +263,31 @@ func (h *PanelHandler) handleCheckin(w http.ResponseWriter, r *http.Request, use
 	if !useQR {
 		raw = payload.RegistrationCode
 	}
+	if raw == "" {
+		raw = payload.QRToken
+	}
+	if raw == "" && payload.NIM != "" {
+		raw = payload.NIM
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Kode registrasi wajib diisi.")
 		return
 	}
 
-	result, err := h.svc.repo.ParseRegistrationCode(ctx, raw)
+	var result *PanelRegistrationCode
+	result, err = h.svc.repo.FindRegistrationToken(ctx, raw)
 	if err != nil {
-		response.Error(w, http.StatusBadRequest, "INVALID_REGISTRATION_QR", "Kode QR pendaftaran tidak dikenali.", nil)
-		return
+		result, err = h.svc.repo.ParseRegistrationCode(ctx, raw)
+	}
+	if err != nil {
+		// fallback: treat raw as NIM/NIDN/NIP
+		if fallback, ferr := h.svc.repo.FindVoterByIdentifier(ctx, electionID, raw); ferr == nil {
+			result = fallback
+		} else {
+			response.Error(w, http.StatusBadRequest, "INVALID_REGISTRATION_QR", "Kode QR pendaftaran tidak dikenali.", nil)
+			return
+		}
 	}
 
 	if result.TPSID != nil && *result.TPSID != tpsID {
@@ -367,6 +384,49 @@ func (h *PanelHandler) Status(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, resp)
 }
 
+// GET /tps-panel/stats
+func (h *PanelHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionId tidak valid.")
+		return
+	}
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "tpsId tidak valid.")
+		return
+	}
+	role, _ := ctxkeys.GetUserRole(ctx)
+	tokenTPS, _ := ctxkeys.GetTPSID(ctx)
+	if role == "" {
+		response.Forbidden(w, "TPS_ACCESS_DENIED", "Akses ditolak.")
+		return
+	}
+
+	tpsRow, err := h.svc.EnsureAccess(ctx, electionID, tpsID, role, &tokenTPS)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	data, err := h.svc.Stats(ctx, tpsID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"election_id":      tpsRow.ElectionID,
+		"tps":              data.TPS,
+		"status":           data.Status,
+		"stats":            data.Stats,
+		"last_activity_at": data.LastActive,
+	})
+}
+
 // GET /tps-panel/stats/timeline
 func (h *PanelHandler) Timeline(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -404,6 +464,45 @@ func (h *PanelHandler) Timeline(w http.ResponseWriter, r *http.Request) {
 		"election_id": tpsRow.ElectionID,
 		"tps_id":      tpsID,
 		"points":      points,
+	})
+}
+
+// GET /tps-panel/logs
+func (h *PanelHandler) Logs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionId tidak valid.")
+		return
+	}
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "tpsId tidak valid.")
+		return
+	}
+	role, _ := ctxkeys.GetUserRole(ctx)
+	tokenTPS, _ := ctxkeys.GetTPSID(ctx)
+	if role == "" {
+		response.Forbidden(w, "TPS_ACCESS_DENIED", "Akses ditolak.")
+		return
+	}
+
+	if _, err := h.svc.EnsureAccess(ctx, electionID, tpsID, role, &tokenTPS); err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 50)
+	logs, err := h.svc.Logs(ctx, tpsID, limit)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"items": logs,
 	})
 }
 

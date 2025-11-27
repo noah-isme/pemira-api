@@ -101,3 +101,34 @@ type TPSQRPrintResponse struct {
 	Name      string `json:"name"`
 	QRPayload string `json:"qr_payload"`
 }
+
+// Allocation summary for a TPS within its election.
+type TPSAllocationSummary struct {
+	TotalElectionVoters int64                `json:"total_tps_voters"`
+	AllocatedToThisTPS  int64                `json:"allocated_to_this_tps"`
+	Voted               int64                `json:"voted"`
+	NotVoted            int64                `json:"not_voted"`
+	Voters              []TPSAllocationVoter `json:"voters,omitempty"`
+}
+
+type TPSAllocationVoter struct {
+	VoterID  int64      `json:"voter_id"`
+	NIM      string     `json:"nim"`
+	Name     string     `json:"name"`
+	HasVoted bool       `json:"has_voted"`
+	VotedAt  *time.Time `json:"voted_at,omitempty"`
+}
+
+type TPSActivitySummary struct {
+	CheckinsToday int64                 `json:"checkins_today"`
+	Voted         int64                 `json:"voted"`
+	NotVoted      int64                 `json:"not_voted"`
+	Timeline      []TPSActivityTimeline `json:"timeline"`
+}
+
+type TPSActivityTimeline struct {
+	Hour     string `json:"hour"`     // ISO hour bucket
+	Total    int64  `json:"checkins"` // total checkins in bucket
+	Approved int64  `json:"approved"` // approved/used/voted
+	Voted    int64  `json:"voted"`    // voted in bucket (approx by status USED/VOTED)
+}

@@ -50,9 +50,12 @@ type Repository interface {
 	PanelGetCheckin(ctx context.Context, checkinID int64) (*PanelCheckinRow, error)
 	PanelTimeline(ctx context.Context, tpsID int64) ([]PanelTimelineRow, error)
 	PanelListTPSByElection(ctx context.Context, electionID int64) ([]PanelTPSListItem, error)
+	PanelLogs(ctx context.Context, tpsID int64, limit int) ([]PanelLogRow, error)
 	GetOperatorInfo(ctx context.Context, userID int64) (*OperatorInfo, error)
 	ParseRegistrationCode(ctx context.Context, raw string) (*PanelRegistrationCode, error)
 	CreatePanelCheckin(ctx context.Context, reg PanelRegistrationCode) (*PanelCheckinRow, error)
+	FindVoterByIdentifier(ctx context.Context, electionID int64, identifier string) (*PanelRegistrationCode, error)
+	FindRegistrationToken(ctx context.Context, token string) (*PanelRegistrationCode, error)
 }
 
 type ListFilter struct {

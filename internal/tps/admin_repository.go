@@ -22,4 +22,8 @@ type AdminRepository interface {
 
 	// Monitoring
 	ListMonitorForElection(ctx context.Context, electionID int64) ([]TPSMonitorDTO, error)
+
+	// Allocation & activity
+	GetAllocation(ctx context.Context, tpsID int64) (*TPSAllocationSummary, error)
+	GetActivity(ctx context.Context, tpsID int64) (*TPSActivitySummary, error)
 }

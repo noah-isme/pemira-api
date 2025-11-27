@@ -226,6 +226,14 @@ type PanelTimelineRow struct {
 	Voted       int
 }
 
+type PanelLogRow struct {
+	Type      string
+	Status    string
+	VoterName string
+	VoterNIM  string
+	At        time.Time
+}
+
 type OperatorInfo struct {
 	ID       int64
 	Username string

@@ -95,11 +95,11 @@ func authMiddleware(next http.Handler) http.Handler {
 		// Validate token and extract user/voter ID
 		// For voter endpoints: set voter_id
 		// For operator endpoints: set user_id
-		
+
 		// Example:
 		ctx := context.WithValue(r.Context(), "voter_id", int64(123))
 		ctx = context.WithValue(ctx, "user_id", int64(456))
-		
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -156,66 +156,66 @@ func ExampleIntegrationTest() {
 // Example: Usage in main.go
 func ExampleMainIntegration() {
 	// In your main.go:
-	
+
 	/*
-	package main
+		package main
 
-	import (
-		"context"
-		"log"
-		"net/http"
-		"os"
+		import (
+			"context"
+			"log"
+			"net/http"
+			"os"
 
-		"github.com/gorilla/mux"
-		"pemira-api/internal/tps"
-		"pemira-api/internal/voting"
-	)
+			"github.com/gorilla/mux"
+			"pemira-api/internal/tps"
+			"pemira-api/internal/voting"
+		)
 
-	func main() {
-		ctx := context.Background()
+		func main() {
+			ctx := context.Background()
 
-		// Get DB URL from env
-		dbURL := os.Getenv("DATABASE_URL")
-		if dbURL == "" {
-			log.Fatal("DATABASE_URL is required")
+			// Get DB URL from env
+			dbURL := os.Getenv("DATABASE_URL")
+			if dbURL == "" {
+				log.Fatal("DATABASE_URL is required")
+			}
+
+			// Setup TPS check-in system
+			checkinHandler, err := tps.SetupCheckinSystem(ctx, dbURL)
+			if err != nil {
+				log.Fatal("Failed to setup check-in system:", err)
+			}
+
+			// Setup voting system
+			votingHandler, err := voting.SetupVotingSystem(ctx, dbURL)
+			if err != nil {
+				log.Fatal("Failed to setup voting system:", err)
+			}
+
+			// Setup router
+			r := mux.NewRouter()
+
+			// Register routes
+			checkinHandler.RegisterRoutes(r)
+			votingHandler.RegisterRoutes(r)
+
+			// Health check
+			r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			}).Methods("GET")
+
+			// Start server
+			port := os.Getenv("PORT")
+			if port == "" {
+				port = "8080"
+			}
+
+			log.Printf("Server starting on port %s", port)
+			if err := http.ListenAndServe(":"+port, r); err != nil {
+				log.Fatal(err)
+			}
 		}
-
-		// Setup TPS check-in system
-		checkinHandler, err := tps.SetupCheckinSystem(ctx, dbURL)
-		if err != nil {
-			log.Fatal("Failed to setup check-in system:", err)
-		}
-
-		// Setup voting system
-		votingHandler, err := voting.SetupVotingSystem(ctx, dbURL)
-		if err != nil {
-			log.Fatal("Failed to setup voting system:", err)
-		}
-
-		// Setup router
-		r := mux.NewRouter()
-
-		// Register routes
-		checkinHandler.RegisterRoutes(r)
-		votingHandler.RegisterRoutes(r)
-
-		// Health check
-		r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
-		}).Methods("GET")
-
-		// Start server
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "8080"
-		}
-
-		log.Printf("Server starting on port %s", port)
-		if err := http.ListenAndServe(":"+port, r); err != nil {
-			log.Fatal(err)
-		}
-	}
 	*/
 }
 
@@ -251,25 +251,25 @@ func ExampleExpireCheckinJob(db *pgxpool.Pool) {
 // Example: WebSocket integration
 func ExampleWebSocketIntegration(wsHub interface{}) {
 	// After ApproveCheckin success
-	
-	/*
-	// Notify voter
-	wsHub.PublishToVoter(voterID, map[string]interface{}{
-		"type": "CHECKIN_APPROVED",
-		"data": map[string]interface{}{
-			"checkin_id": checkinID,
-			"tps_id":     tpsID,
-			"expires_at": expiresAt.Unix(),
-		},
-	})
 
-	// Notify TPS panel
-	wsHub.PublishToTPS(tpsID, map[string]interface{}{
-		"type": "CHECKIN_UPDATED",
-		"data": map[string]interface{}{
-			"checkin_id": checkinID,
-			"status":     "APPROVED",
-		},
-	})
+	/*
+		// Notify voter
+		wsHub.PublishToVoter(voterID, map[string]interface{}{
+			"type": "CHECKIN_APPROVED",
+			"data": map[string]interface{}{
+				"checkin_id": checkinID,
+				"tps_id":     tpsID,
+				"expires_at": expiresAt.Unix(),
+			},
+		})
+
+		// Notify TPS panel
+		wsHub.PublishToTPS(tpsID, map[string]interface{}{
+			"type": "CHECKIN_UPDATED",
+			"data": map[string]interface{}{
+				"checkin_id": checkinID,
+				"status":     "APPROVED",
+			},
+		})
 	*/
 }

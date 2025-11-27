@@ -19,7 +19,7 @@ type Voter struct {
 	ClassLabel              *string     `json:"class_label"`
 	PhotoURL                *string     `json:"photo_url"`
 	Bio                     *string     `json:"bio"`
-	VotingMethodPreference  *string     `json:"voting_method_preference"`
+	VotingMethod            *string     `json:"voting_method"`
 	AcademicStatus          string      `json:"academic_status"`
 	CreatedAt               time.Time   `json:"created_at"`
 	UpdatedAt               time.Time   `json:"updated_at"`

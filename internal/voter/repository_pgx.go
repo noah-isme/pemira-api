@@ -23,7 +23,7 @@ func (r *PgRepository) GetByID(ctx context.Context, id int64) (*Voter, error) {
 	query := `
 		SELECT id, nim, name, email, phone, faculty_code, faculty_name, 
 		       study_program_code, study_program_name, cohort_year, class_label,
-		       photo_url, bio, voting_method_preference, academic_status, 
+		       photo_url, bio, voting_method, academic_status, 
 		       created_at, updated_at
 		FROM voters
 		WHERE id = $1
@@ -34,7 +34,7 @@ func (r *PgRepository) GetByID(ctx context.Context, id int64) (*Voter, error) {
 		&v.ID, &v.NIM, &v.Name, &v.Email, &v.Phone,
 		&v.FacultyCode, &v.FacultyName, &v.StudyProgramCode, &v.StudyProgramName,
 		&v.CohortYear, &v.ClassLabel, &v.PhotoURL, &v.Bio,
-		&v.VotingMethodPreference, &v.AcademicStatus, &v.CreatedAt, &v.UpdatedAt,
+		&v.VotingMethod, &v.AcademicStatus, &v.CreatedAt, &v.UpdatedAt,
 	)
 
 	if err != nil {
@@ -51,7 +51,7 @@ func (r *PgRepository) GetByNIM(ctx context.Context, nim string) (*Voter, error)
 	query := `
 		SELECT id, nim, name, email, phone, faculty_code, faculty_name, 
 		       study_program_code, study_program_name, cohort_year, class_label,
-		       photo_url, bio, voting_method_preference, academic_status, 
+		       photo_url, bio, voting_method, academic_status, 
 		       created_at, updated_at
 		FROM voters
 		WHERE nim = $1
@@ -62,7 +62,7 @@ func (r *PgRepository) GetByNIM(ctx context.Context, nim string) (*Voter, error)
 		&v.ID, &v.NIM, &v.Name, &v.Email, &v.Phone,
 		&v.FacultyCode, &v.FacultyName, &v.StudyProgramCode, &v.StudyProgramName,
 		&v.CohortYear, &v.ClassLabel, &v.PhotoURL, &v.Bio,
-		&v.VotingMethodPreference, &v.AcademicStatus, &v.CreatedAt, &v.UpdatedAt,
+		&v.VotingMethod, &v.AcademicStatus, &v.CreatedAt, &v.UpdatedAt,
 	)
 
 	if err != nil {
@@ -86,7 +86,7 @@ func (r *PgRepository) List(ctx context.Context, params shared.PaginationParams)
 	query := `
 		SELECT id, nim, name, email, phone, faculty_code, faculty_name, 
 		       study_program_code, study_program_name, cohort_year, class_label,
-		       photo_url, bio, voting_method_preference, academic_status, 
+		       photo_url, bio, voting_method, academic_status, 
 		       created_at, updated_at
 		FROM voters
 		ORDER BY created_at DESC
@@ -106,7 +106,7 @@ func (r *PgRepository) List(ctx context.Context, params shared.PaginationParams)
 			&v.ID, &v.NIM, &v.Name, &v.Email, &v.Phone,
 			&v.FacultyCode, &v.FacultyName, &v.StudyProgramCode, &v.StudyProgramName,
 			&v.CohortYear, &v.ClassLabel, &v.PhotoURL, &v.Bio,
-			&v.VotingMethodPreference, &v.AcademicStatus, &v.CreatedAt, &v.UpdatedAt,
+			&v.VotingMethod, &v.AcademicStatus, &v.CreatedAt, &v.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, err
@@ -138,13 +138,13 @@ func (r *PgRepository) Update(ctx context.Context, voter *Voter) error {
 	query := `
 		UPDATE voters
 		SET email = $2, phone = $3, photo_url = $4, bio = $5, 
-		    voting_method_preference = $6, updated_at = NOW()
+		    voting_method = $6, updated_at = NOW()
 		WHERE id = $1
 	`
 
 	result, err := r.db.Exec(ctx, query,
 		voter.ID, voter.Email, voter.Phone, voter.PhotoURL,
-		voter.Bio, voter.VotingMethodPreference,
+		voter.Bio, voter.VotingMethod,
 	)
 
 	if err != nil {
@@ -247,7 +247,7 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 				v.cohort_year,
 				v.photo_url,
 				v.voter_type,
-				v.voting_method_preference,
+				v.voting_method,
 				ua.created_at,
 				ua.last_login_at,
 				COALESCE(ua.login_count, 0) as login_count,
@@ -280,7 +280,7 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 		SELECT 
 			vi.voter_id, vi.name, vi.username, vi.email, vi.phone,
 			vi.faculty_name, vi.study_program_name, vi.cohort_year, vi.photo_url, vi.voter_type,
-			COALESCE(voti.method, vi.voting_method_preference) as preferred_method,
+			COALESCE(voti.method, vi.voting_method::text) as preferred_method,
 			COALESCE(voti.has_voted, false) as has_voted,
 			voti.voted_at,
 			voti.tps_name,
@@ -397,10 +397,10 @@ func (r *PgRepository) UpdateVotingMethod(ctx context.Context, voterID, election
 		return ErrAlreadyCheckedIn
 	}
 
-	// Update voting method preference
+	// Update voting method
 	updateQuery := `
 		UPDATE voters
-		SET voting_method_preference = $2, updated_at = NOW()
+		SET voting_method = $2, updated_at = NOW()
 		WHERE id = $1
 	`
 

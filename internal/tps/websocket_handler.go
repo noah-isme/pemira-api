@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
-	
+
 	"pemira-api/internal/shared/ctxkeys"
 )
 
@@ -71,7 +71,7 @@ func (h *WSHub) Run() {
 			}
 			h.clients[reg.tpsID][reg.conn] = true
 			h.mu.Unlock()
-			
+
 		case reg := <-h.unregister:
 			h.mu.Lock()
 			if clients, ok := h.clients[reg.tpsID]; ok {
@@ -84,12 +84,12 @@ func (h *WSHub) Run() {
 				}
 			}
 			h.mu.Unlock()
-			
+
 		case msg := <-h.broadcast:
 			h.mu.RLock()
 			clients := h.clients[msg.tpsID]
 			h.mu.RUnlock()
-			
+
 			data, _ := json.Marshal(msg.message)
 			for conn := range clients {
 				err := conn.WriteMessage(websocket.TextMessage, data)
@@ -150,34 +150,34 @@ func (h *WSHandler) HandleTPSQueue(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid TPS ID", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Verify auth
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	
+
 	// Verify TPS access
 	hasAccess, err := h.service.repo.IsPanitiaAssigned(r.Context(), tpsID, userID)
 	if err != nil || !hasAccess {
 		http.Error(w, "Access denied", http.StatusForbidden)
 		return
 	}
-	
+
 	// Upgrade connection
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
 	}
-	
+
 	// Register client
 	h.hub.register <- Registration{tpsID: tpsID, conn: conn}
-	
+
 	// Send initial queue state
 	go h.sendInitialQueue(conn, tpsID)
-	
+
 	// Keep connection alive and handle client messages
 	go h.readPump(conn, tpsID)
 }
@@ -185,7 +185,7 @@ func (h *WSHandler) HandleTPSQueue(w http.ResponseWriter, r *http.Request) {
 func (h *WSHandler) sendInitialQueue(conn *websocket.Conn, tpsID int64) {
 	// Note: This function sends initial queue state when client connects
 	// Implementation can be enhanced to fetch and send current pending checkins
-	
+
 	// Send welcome message
 	msg := WSMessage{
 		Type: "CONNECTED",
@@ -194,7 +194,7 @@ func (h *WSHandler) sendInitialQueue(conn *websocket.Conn, tpsID int64) {
 			"timestamp": time.Now(),
 		},
 	}
-	
+
 	data, _ := json.Marshal(msg)
 	conn.WriteMessage(websocket.TextMessage, data)
 }
@@ -203,13 +203,13 @@ func (h *WSHandler) readPump(conn *websocket.Conn, tpsID int64) {
 	defer func() {
 		h.hub.unregister <- Registration{tpsID: tpsID, conn: conn}
 	}()
-	
+
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
-	
+
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {

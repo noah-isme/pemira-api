@@ -216,6 +216,50 @@ func (h *AdminHandler) RemoveOperator(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Allocation summary: GET /admin/tps/{tpsID}/allocation
+func (h *AdminHandler) Allocation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tpsID, err := parseIDParam(r, "tpsID")
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "tpsID tidak valid.")
+		return
+	}
+
+	data, err := h.svc.Allocation(ctx, tpsID)
+	if err != nil {
+		if errors.Is(err, ErrTPSNotFound) {
+			response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil alokasi TPS.")
+		return
+	}
+
+	response.Success(w, http.StatusOK, data)
+}
+
+// Activity summary: GET /admin/tps/{tpsID}/activity
+func (h *AdminHandler) Activity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tpsID, err := parseIDParam(r, "tpsID")
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "tpsID tidak valid.")
+		return
+	}
+
+	data, err := h.svc.Activity(ctx, tpsID)
+	if err != nil {
+		if errors.Is(err, ErrTPSNotFound) {
+			response.NotFound(w, "TPS_NOT_FOUND", "TPS tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil aktivitas TPS.")
+		return
+	}
+
+	response.Success(w, http.StatusOK, data)
+}
+
 // Monitor handles GET /admin/elections/{electionID}/tps/monitor
 func (h *AdminHandler) Monitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
