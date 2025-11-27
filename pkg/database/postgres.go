@@ -17,6 +17,9 @@ func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 	config.MinConns = 5
 	config.MaxConnLifetime = time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
+	
+	// Set search_path to myschema for production database
+	config.ConnConfig.RuntimeParams["search_path"] = "myschema,public"
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
