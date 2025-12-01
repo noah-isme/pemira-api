@@ -212,3 +212,94 @@ func (h *AuthHandler) handleError(w http.ResponseWriter, err error) {
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }
+
+// LogoutPage handles GET /auth/logout-page - simple HTML page to clear tokens
+func (h *AuthHandler) LogoutPage(w http.ResponseWriter, r *http.Request) {
+	html := `<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logout - PEMIRA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+        }
+        h1 { color: #333; margin-bottom: 1rem; }
+        p { color: #666; margin-bottom: 1.5rem; }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success { color: #10b981; font-weight: bold; }
+        a {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.5rem 2rem;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        a:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner" id="spinner"></div>
+        <h1>Logout</h1>
+        <p id="message">Menghapus sesi Anda...</p>
+        <div id="loginLink" style="display:none;">
+            <p class="success">Berhasil logout!</p>
+            <a href="/">Kembali ke Login</a>
+        </div>
+    </div>
+    <script>
+        // Clear all possible token storage locations
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Clear specific token keys (in case they use specific names)
+        const tokenKeys = ['token', 'access_token', 'refresh_token', 'auth_token', 'jwt'];
+        tokenKeys.forEach(key => {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        });
+        
+        // Wait a moment then show success
+        setTimeout(() => {
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('message').style.display = 'none';
+            document.getElementById('loginLink').style.display = 'block';
+        }, 1000);
+    </script>
+</body>
+</html>`
+	
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(html))
+}

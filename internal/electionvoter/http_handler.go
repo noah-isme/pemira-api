@@ -71,6 +71,8 @@ func (h *Handler) AdminUpsert(w http.ResponseWriter, r *http.Request) {
 			response.Conflict(w, "DUPLICATE", "NIM sudah terdaftar di pemilu ini")
 			return
 		default:
+			// Log actual error for debugging
+			println("DEBUG AdminUpsert error:", err.Error())
 			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal menyimpan data pemilih")
 			return
 		}

@@ -197,6 +197,7 @@ func main() {
 		r.Post("/auth/register/lecturer-staff", authHandler.RegisterLecturerStaff)
 		r.Post("/auth/login", authHandler.Login)
 		r.Post("/auth/refresh", authHandler.RefreshToken)
+		r.Get("/auth/logout-page", authHandler.LogoutPage)
 		r.Post("/tps-panel/auth/login", tpsPanelAuthHandler.PanelLogin)
 
 		// Public election routes
