@@ -9,9 +9,12 @@ import (
 )
 
 var (
-	allowedStatuses      = map[string]struct{}{"PENDING": {}, "VERIFIED": {}, "REJECTED": {}, "VOTED": {}, "BLOCKED": {}}
-	allowedVotingMethods = map[string]struct{}{"ONLINE": {}, "TPS": {}}
+	allowedStatuses       = map[string]struct{}{"PENDING": {}, "VERIFIED": {}, "REJECTED": {}, "VOTED": {}, "BLOCKED": {}}
+	allowedVotingMethods  = map[string]struct{}{"ONLINE": {}, "TPS": {}}
+	allowedAcademicStatus = map[string]struct{}{"ACTIVE": {}, "GRADUATED": {}, "ON_LEAVE": {}, "DROPPED": {}, "INACTIVE": {}}
 )
+
+const defaultAcademicStatus = "ACTIVE"
 
 type Service struct {
 	repo Repository
@@ -58,6 +61,12 @@ func (s *Service) UpsertAndEnroll(ctx context.Context, electionID int64, in Upse
 	if _, ok := allowedVotingMethods[in.VotingMethod]; !ok {
 		return nil, shared.ErrBadRequest
 	}
+
+	normalizedStatus, err := normalizeAcademicStatus(in.AcademicStatus)
+	if err != nil {
+		return nil, err
+	}
+	in.AcademicStatus = &normalizedStatus
 
 	return s.repo.UpsertAndEnroll(ctx, electionID, in)
 }
@@ -131,4 +140,18 @@ func ValidateFilter(filter ListFilter) (ListFilter, error) {
 		}
 	}
 	return filter, nil
+}
+
+func normalizeAcademicStatus(raw *string) (string, error) {
+	status := defaultAcademicStatus
+	if raw != nil {
+		normalized := strings.ToUpper(strings.TrimSpace(*raw))
+		if normalized != "" {
+			status = normalized
+		}
+	}
+	if _, ok := allowedAcademicStatus[status]; !ok {
+		return "", shared.ErrBadRequest
+	}
+	return status, nil
 }

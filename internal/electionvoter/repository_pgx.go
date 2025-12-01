@@ -21,6 +21,19 @@ func NewPgRepository(db *pgxpool.Pool) Repository {
 	return &pgRepository{db: db}
 }
 
+const (
+	identityColumnStudent  = "student_id"
+	identityColumnLecturer = "lecturer_id"
+	identityColumnStaff    = "staff_id"
+)
+
+type identityRefs struct {
+	Column     string
+	StudentID  *int64
+	LecturerID *int64
+	StaffID    *int64
+}
+
 func (r *pgRepository) LookupByNIM(ctx context.Context, electionID int64, nim string) (*LookupResult, error) {
 	query := `
 		SELECT
@@ -158,62 +171,50 @@ func (r *pgRepository) UpsertAndEnroll(ctx context.Context, electionID int64, in
 		status = "PENDING"
 	}
 
-	var voterID int64
-	var createdVoter bool
-	qVoter := `
-		INSERT INTO voters (
-			nim, name, email, phone,
-			faculty_code, faculty_name,
-			study_program_code, study_program_name,
-			cohort_year, academic_status,
-			voter_type, lecturer_id, staff_id,
-			voting_method,
-			updated_at
-		) VALUES (
-			$1, $2, $3, $4,
-			$5, $6,
-			$7, $8,
-			$9, $10,
-			$11, $12, $13,
-			$14,
-			NOW()
-		)
-		ON CONFLICT (nim) DO UPDATE SET
-			name = EXCLUDED.name,
-			email = EXCLUDED.email,
-			phone = EXCLUDED.phone,
-			faculty_code = EXCLUDED.faculty_code,
-			faculty_name = EXCLUDED.faculty_name,
-			study_program_code = EXCLUDED.study_program_code,
-			study_program_name = EXCLUDED.study_program_name,
-			cohort_year = EXCLUDED.cohort_year,
-			academic_status = EXCLUDED.academic_status,
-			voter_type = EXCLUDED.voter_type,
-			lecturer_id = EXCLUDED.lecturer_id,
-			staff_id = EXCLUDED.staff_id,
-			voting_method = EXCLUDED.voting_method,
-			updated_at = NOW()
-		RETURNING id, (xmax = 0) AS is_insert;
-	`
+	identity := identityRefs{}
+	switch voterType {
+	case "STUDENT":
+		studentID, err := r.upsertStudentIdentity(ctx, tx, nim, in)
+		if err != nil {
+			return nil, err
+		}
+		identity.Column = identityColumnStudent
+		identity.StudentID = &studentID
+	case "LECTURER":
+		lecturerID := in.LecturerID
+		if lecturerID == nil {
+			foundID, err := r.lookupLecturerID(ctx, tx, nim)
+			if err != nil {
+				return nil, err
+			}
+			if foundID == nil {
+				return nil, shared.ErrBadRequest
+			}
+			lecturerID = foundID
+		}
+		identity.Column = identityColumnLecturer
+		identity.LecturerID = lecturerID
+	case "STAFF":
+		staffID := in.StaffID
+		if staffID == nil {
+			foundID, err := r.lookupStaffID(ctx, tx, nim)
+			if err != nil {
+				return nil, err
+			}
+			if foundID == nil {
+				return nil, shared.ErrBadRequest
+			}
+			staffID = foundID
+		}
+		identity.Column = identityColumnStaff
+		identity.StaffID = staffID
+	default:
+		identity.Column = ""
+	}
 
-	err = tx.QueryRow(ctx, qVoter,
-		nim,
-		in.Name,
-		in.Email,
-		in.Phone,
-		in.FacultyCode,
-		in.FacultyName,
-		in.StudyProgramCode,
-		in.StudyProgramName,
-		in.CohortYear,
-		in.AcademicStatus,
-		voterType,
-		in.LecturerID,
-		in.StaffID,
-		votingMethod,
-	).Scan(&voterID, &createdVoter)
+	voterID, createdVoter, err := r.saveVoterRecord(ctx, tx, nim, voterType, votingMethod, in, identity)
 	if err != nil {
-		return nil, fmt.Errorf("upsert voter: %w", err)
+		return nil, err
 	}
 
 	var ev ElectionVoter
@@ -262,6 +263,228 @@ func (r *pgRepository) UpsertAndEnroll(ctx context.Context, electionID int64, in
 		CreatedEnrollment:   createdEnrollment,
 		DuplicateInElection: false,
 	}, nil
+}
+
+func (r *pgRepository) saveVoterRecord(
+	ctx context.Context,
+	tx pgx.Tx,
+	nim string,
+	voterType string,
+	votingMethod string,
+	in UpsertAndEnrollInput,
+	identity identityRefs,
+) (int64, bool, error) {
+	existingID, err := r.findExistingVoter(ctx, tx, identity, nim)
+	if err != nil {
+		return 0, false, err
+	}
+
+	status := resolveAcademicStatus(in.AcademicStatus)
+
+	if existingID != nil {
+		const updateQuery = `
+		UPDATE voters
+		SET
+			nim = $2,
+			name = $3,
+			email = $4,
+			phone = $5,
+			faculty_code = $6,
+			faculty_name = $7,
+			study_program_code = $8,
+			study_program_name = $9,
+			cohort_year = $10,
+			academic_status = $11,
+			voter_type = $12,
+			student_id = $13,
+			lecturer_id = $14,
+			staff_id = $15,
+			voting_method = $16,
+			updated_at = NOW()
+		WHERE id = $1
+		RETURNING id;
+		`
+
+		var voterID int64
+		if err := tx.QueryRow(ctx, updateQuery,
+			*existingID,
+			nim,
+			in.Name,
+			in.Email,
+			in.Phone,
+			in.FacultyCode,
+			in.FacultyName,
+			in.StudyProgramCode,
+			in.StudyProgramName,
+			in.CohortYear,
+			status,
+			voterType,
+			identity.StudentID,
+			identity.LecturerID,
+			identity.StaffID,
+			votingMethod,
+		).Scan(&voterID); err != nil {
+			return 0, false, fmt.Errorf("update voter: %w", err)
+		}
+		return voterID, false, nil
+	}
+
+	const insertQuery = `
+	INSERT INTO voters (
+		nim, name, email, phone,
+		faculty_code, faculty_name,
+		study_program_code, study_program_name,
+		cohort_year, academic_status,
+		voter_type, student_id, lecturer_id, staff_id,
+		voting_method, created_at, updated_at
+	) VALUES (
+		$1, $2, $3, $4,
+		$5, $6,
+		$7, $8,
+		$9, $10,
+		$11, $12, $13, $14,
+		$15, NOW(), NOW()
+	)
+	RETURNING id;
+	`
+
+	var voterID int64
+	if err := tx.QueryRow(ctx, insertQuery,
+		nim,
+		in.Name,
+		in.Email,
+		in.Phone,
+		in.FacultyCode,
+		in.FacultyName,
+		in.StudyProgramCode,
+		in.StudyProgramName,
+		in.CohortYear,
+		status,
+		voterType,
+		identity.StudentID,
+		identity.LecturerID,
+		identity.StaffID,
+		votingMethod,
+	).Scan(&voterID); err != nil {
+		return 0, false, fmt.Errorf("insert voter: %w", err)
+	}
+	return voterID, true, nil
+}
+
+func (r *pgRepository) findExistingVoter(ctx context.Context, tx pgx.Tx, identity identityRefs, nim string) (*int64, error) {
+	if col, idPtr, ok := identity.columnAndID(); ok {
+		query := fmt.Sprintf(`SELECT id FROM voters WHERE %s = $1 LIMIT 1`, col)
+		var existing int64
+		err := tx.QueryRow(ctx, query, *idPtr).Scan(&existing)
+		if err == nil {
+			return &existing, nil
+		}
+		if err != nil && err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("find voter by %s: %w", col, err)
+		}
+	}
+
+	var voterID int64
+	err := tx.QueryRow(ctx, `SELECT id FROM voters WHERE nim = $1 ORDER BY id DESC LIMIT 1`, nim).Scan(&voterID)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find voter by nim: %w", err)
+	}
+
+	if col, idPtr, ok := identity.columnAndID(); ok {
+		if _, execErr := tx.Exec(ctx, fmt.Sprintf(`UPDATE voters SET %s = $1 WHERE id = $2`, col), *idPtr, voterID); execErr != nil {
+			return nil, fmt.Errorf("attach %s to voter: %w", col, execErr)
+		}
+	}
+
+	return &voterID, nil
+}
+
+func (r *pgRepository) upsertStudentIdentity(ctx context.Context, tx pgx.Tx, nim string, in UpsertAndEnrollInput) (int64, error) {
+	const query = `
+	INSERT INTO students (nim, name, faculty_code, program_code, cohort_year, class_label, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+	ON CONFLICT (nim) DO UPDATE SET
+		name = EXCLUDED.name,
+		faculty_code = EXCLUDED.faculty_code,
+		program_code = EXCLUDED.program_code,
+		cohort_year = EXCLUDED.cohort_year,
+		class_label = EXCLUDED.class_label,
+		updated_at = NOW()
+	RETURNING id;
+	`
+
+	var studentID int64
+	if err := tx.QueryRow(ctx, query,
+		nim,
+		in.Name,
+		in.FacultyCode,
+		in.StudyProgramCode,
+		in.CohortYear,
+		nil,
+	).Scan(&studentID); err != nil {
+		return 0, fmt.Errorf("upsert student identity: %w", err)
+	}
+	return studentID, nil
+}
+
+func (r *pgRepository) lookupLecturerID(ctx context.Context, tx pgx.Tx, nidn string) (*int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx, `SELECT id FROM lecturers WHERE nidn = $1 LIMIT 1`, nidn).Scan(&id)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find lecturer by nidn: %w", err)
+	}
+	return &id, nil
+}
+
+func (r *pgRepository) lookupStaffID(ctx context.Context, tx pgx.Tx, nip string) (*int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx, `SELECT id FROM staff_members WHERE nip = $1 LIMIT 1`, nip).Scan(&id)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find staff by nip: %w", err)
+	}
+	return &id, nil
+}
+
+func (i identityRefs) columnAndID() (string, *int64, bool) {
+	switch i.Column {
+	case identityColumnStudent:
+		if i.StudentID == nil {
+			return "", nil, false
+		}
+		return identityColumnStudent, i.StudentID, true
+	case identityColumnLecturer:
+		if i.LecturerID == nil {
+			return "", nil, false
+		}
+		return identityColumnLecturer, i.LecturerID, true
+	case identityColumnStaff:
+		if i.StaffID == nil {
+			return "", nil, false
+		}
+		return identityColumnStaff, i.StaffID, true
+	default:
+		return "", nil, false
+	}
+}
+
+func resolveAcademicStatus(raw *string) string {
+	if raw == nil {
+		return defaultAcademicStatus
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		return defaultAcademicStatus
+	}
+	return strings.ToUpper(trimmed)
 }
 
 func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFilter, pag shared.PaginationParams) ([]ElectionVoter, int64, error) {
