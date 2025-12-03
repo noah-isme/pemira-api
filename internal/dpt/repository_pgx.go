@@ -446,7 +446,14 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, elec
 			v.name,
 			COALESCE(v.faculty_name, ''),
 			COALESCE(v.study_program_name, ''),
-			COALESCE(v.class_label, '') AS semester,
+			COALESCE(
+				v.semester::TEXT,
+				CASE 
+					WHEN v.cohort_year IS NOT NULL AND v.voter_type = 'STUDENT' 
+					THEN ((EXTRACT(YEAR FROM CURRENT_DATE)::int - v.cohort_year) * 2 + 1)::TEXT
+					ELSE ''
+				END
+			) AS semester,
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
@@ -454,7 +461,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, elec
 			COALESCE(vs.is_eligible, true) as is_eligible,
 			COALESCE(vs.has_voted, false) as has_voted,
 			vs.voted_at,
-			vs.voting_method as status_voting_method,
+			COALESCE(ev.voting_method, vs.voting_method, v.voting_method) as status_voting_method,
 			v.voting_method as voter_voting_method,
 			vs.tps_id
 		FROM election_voters ev
