@@ -3,8 +3,6 @@ package voter
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -272,6 +270,14 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 				v.faculty_name,
 				v.study_program_name,
 				v.cohort_year,
+				COALESCE(
+					v.semester::TEXT,
+					CASE 
+						WHEN v.cohort_year IS NOT NULL AND v.voter_type = 'STUDENT' 
+						THEN ((EXTRACT(YEAR FROM CURRENT_DATE)::int - v.cohort_year) * 2 + 1)::TEXT
+						ELSE '-'
+					END
+				) as semester,
 				v.photo_url,
 				v.voter_type,
 				v.voting_method,
@@ -305,7 +311,7 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 		)
 		SELECT 
 			vi.voter_id, vi.name, vi.username, vi.email, vi.phone,
-			vi.faculty_name, vi.study_program_name, vi.cohort_year, vi.photo_url, vi.voter_type,
+			vi.faculty_name, vi.study_program_name, vi.cohort_year, vi.semester, vi.photo_url, vi.voter_type,
 			COALESCE(voti.method, vi.voting_method::text) as preferred_method,
 			COALESCE(voti.has_voted, false) as has_voted,
 			voti.voted_at,
@@ -324,7 +330,6 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 	`
 
 	var response CompleteProfileResponse
-	var semester string
 
 	err := r.db.QueryRow(ctx, query, voterID, userID, electionID).Scan(
 		&response.PersonalInfo.VoterID,
@@ -335,6 +340,7 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 		&response.PersonalInfo.FacultyName,
 		&response.PersonalInfo.StudyProgramName,
 		&response.PersonalInfo.CohortYear,
+		&response.PersonalInfo.Semester,
 		&response.PersonalInfo.PhotoURL,
 		&response.PersonalInfo.VoterType,
 		&response.VotingInfo.PreferredMethod,
@@ -357,16 +363,6 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 		}
 		return nil, err
 	}
-
-	// Calculate semester
-	if response.PersonalInfo.CohortYear != nil && *response.PersonalInfo.CohortYear > 0 {
-		currentYear := time.Now().Year()
-		yearsEnrolled := currentYear - *response.PersonalInfo.CohortYear
-		semester = fmt.Sprintf("%d", yearsEnrolled*2+1)
-	} else {
-		semester = "-"
-	}
-	response.PersonalInfo.Semester = semester
 
 	// Calculate participation rate
 	if response.Participation.TotalElections > 0 {
