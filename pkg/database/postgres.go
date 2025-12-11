@@ -17,9 +17,13 @@ func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 	config.MinConns = 5
 	config.MaxConnLifetime = time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
-	
+
 	// Set search_path to myschema for production database
 	config.ConnConfig.RuntimeParams["search_path"] = "myschema,public"
+
+	// Disable prepared statements for Supabase Pooler compatibility (transaction mode)
+	// This fixes: ERROR: prepared statement "stmtcache_*" already exists (SQLSTATE 42P05)
+	config.ConnConfig.DefaultQueryExecMode = 1 // pgx.QueryExecModeSimpleProtocol
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
