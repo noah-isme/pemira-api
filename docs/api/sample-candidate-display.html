@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEMIRA - Daftar Kandidat dengan QR Code</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .candidates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .candidate-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .candidate-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+
+        .candidate-number {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .candidate-header {
+            margin-bottom: 20px;
+        }
+
+        .candidate-name {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 10px;
+            padding-right: 70px;
+        }
+
+        .candidate-tagline {
+            color: #666;
+            font-style: italic;
+            font-size: 1rem;
+        }
+
+        .qr-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .qr-container {
+            display: flex;
+            justify-content: center;
+            margin: 15px 0;
+        }
+
+        .qr-code {
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .qr-label {
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 10px;
+            font-size: 1.1rem;
+        }
+
+        .qr-token {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #999;
+            margin-top: 5px;
+            word-break: break-all;
+        }
+
+        .candidate-info {
+            margin-top: 20px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h3 {
+            color: #667eea;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+        }
+
+        .vision-text {
+            color: #444;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        .missions-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .missions-list li {
+            padding: 10px;
+            margin: 8px 0;
+            background: #f0f0f0;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+            color: #333;
+        }
+
+        .missions-list li:before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .status-approved {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5rem;
+            padding: 50px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .print-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+        }
+
+        .print-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .print-button {
+                display: none;
+            }
+
+            .candidate-card {
+                page-break-inside: avoid;
+                margin-bottom: 20px;
+                box-shadow: none;
+                border: 2px solid #333;
+            }
+
+            .candidates-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .candidates-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .candidate-card {
+                padding: 20px;
+            }
+
+            .candidate-name {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗳️ PEMILIHAN RAYA MAHASISWA</h1>
+            <p>Daftar Kandidat & QR Code</p>
+        </header>
+
+        <div id="content">
+            <div class="loading">Memuat data kandidat...</div>
+        </div>
+    </div>
+
+    <button class="print-button" onclick="window.print()">
+        🖨️ Cetak Surat Suara
+    </button>
+
+    <script>
+        // Sample data - replace with actual API call
+        const sampleData = {
+            "election_id": 3,
+            "election_name": "Simulasi Pemilu TPS",
+            "candidates": [
+                {
+                    "id": 4,
+                    "number": 1,
+                    "name": "Paslon Maju Bersama",
+                    "vision": "Membangun kampus yang lebih baik untuk semua mahasiswa",
+                    "missions": [
+                        "Meningkatkan fasilitas kampus",
+                        "Memperkuat organisasi kemahasiswaan",
+                        "Mensejahterakan mahasiswa"
+                    ],
+                    "photo_url": null,
+                    "short_bio": "",
+                    "tagline": "Maju Bersama untuk Kampus Lebih Baik",
+                    "status": "APPROVED",
+                    "qr_code": {
+                        "id": 1,
+                        "token": "CAND01-ABC123XYZ",
+                        "url": "https://pemira.local/ballot-qr/CAND01-ABC123XYZ",
+                        "version": 1,
+                        "is_active": true
+                    }
+                },
+                {
+                    "id": 5,
+                    "number": 2,
+                    "name": "Paslon Perubahan",
+                    "vision": "Kampus progresif dan inklusif",
+                    "missions": [
+                        "Digitalisasi layanan kampus",
+                        "Program beasiswa untuk semua",
+                        "Aksi peduli lingkungan"
+                    ],
+                    "photo_url": null,
+                    "short_bio": "",
+                    "tagline": "Perubahan Dimulai dari Kita",
+                    "status": "APPROVED",
+                    "qr_code": {
+                        "id": 2,
+                        "token": "CAND02-DEF456UVW",
+                        "url": "https://pemira.local/ballot-qr/CAND02-DEF456UVW",
+                        "version": 1,
+                        "is_active": true
+                    }
+                }
+            ]
+        };
+
+        // Function to fetch candidates from API
+        async function fetchCandidates(electionId) {
+            try {
+                // Uncomment this for real API call:
+                // const response = await fetch(`http://localhost:8080/api/v1/elections/${electionId}/candidates`);
+                // if (!response.ok) throw new Error('Failed to fetch candidates');
+                // return await response.json();
+
+                // For demo, return sample data
+                return new Promise(resolve => {
+                    setTimeout(() => resolve(sampleData), 500);
+                });
+            } catch (error) {
+                console.error('Error fetching candidates:', error);
+                throw error;
+            }
+        }
+
+        // Function to generate QR code
+        function generateQRCode(elementId, text) {
+            const element = document.getElementById(elementId);
+            new QRCode(element, {
+                text: text,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        // Function to render candidates
+        function renderCandidates(data) {
+            const content = document.getElementById('content');
+
+            const html = `
+                <div class="candidates-grid">
+                    ${data.candidates.map(candidate => `
+                        <div class="candidate-card">
+                            <div class="candidate-number">${candidate.number}</div>
+
+                            <div class="candidate-header">
+                                <h2 class="candidate-name">${candidate.name}</h2>
+                                ${candidate.tagline ? `<p class="candidate-tagline">"${candidate.tagline}"</p>` : ''}
+                            </div>
+
+                            <div class="qr-section">
+                                <div class="qr-container">
+                                    <div class="qr-code" id="qr-${candidate.id}"></div>
+                                </div>
+                                <p class="qr-label">📱 Scan untuk Memilih</p>
+                                <p class="qr-token">${candidate.qr_code.token}</p>
+                            </div>
+
+                            <div class="candidate-info">
+                                ${candidate.vision ? `
+                                    <div class="info-section">
+                                        <h3>Visi</h3>
+                                        <p class="vision-text">${candidate.vision}</p>
+                                    </div>
+                                ` : ''}
+
+                                ${candidate.missions && candidate.missions.length > 0 ? `
+                                    <div class="info-section">
+                                        <h3>Misi</h3>
+                                        <ul class="missions-list">
+                                            ${candidate.missions.map(mission => `
+                                                <li>${mission}</li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+
+                                <span class="status-badge status-${candidate.status.toLowerCase()}">
+                                    ${candidate.status}
+                                </span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            content.innerHTML = html;
+
+            // Generate QR codes after DOM is updated
+            setTimeout(() => {
+                data.candidates.forEach(candidate => {
+                    generateQRCode(`qr-${candidate.id}`, candidate.qr_code.token);
+                });
+            }, 100);
+        }
+
+        // Function to show error
+        function showError(message) {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="error">
+                    <h2>❌ Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize
+        async function init() {
+            try {
+                const electionId = 3; // Change this to your election ID
+                const data = await fetchCandidates(electionId);
+                renderCandidates(data);
+            } catch (error) {
+                showError('Gagal memuat data kandidat. ' + error.message);
+            }
+        }
+
+        // Run when page loads
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
