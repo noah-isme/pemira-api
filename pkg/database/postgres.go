@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,7 +24,7 @@ func NewPostgresPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 
 	// Disable prepared statements for Supabase Pooler compatibility (transaction mode)
 	// This fixes: ERROR: prepared statement "stmtcache_*" already exists (SQLSTATE 42P05)
-	config.ConnConfig.DefaultQueryExecMode = 1 // pgx.QueryExecModeSimpleProtocol
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
