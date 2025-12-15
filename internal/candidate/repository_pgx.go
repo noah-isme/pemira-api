@@ -92,7 +92,7 @@ func (r *PgCandidateRepository) ListByElection(
 	filter Filter,
 ) ([]Candidate, int64, error) {
 	args := []any{electionID}
-	where := ""
+	where := " AND deleted_at IS NULL" // Exclude soft-deleted candidates
 
 	// status filter - support multiple statuses
 	if len(filter.Statuses) > 0 {
@@ -672,13 +672,33 @@ func (r *PgCandidateRepository) Update(ctx context.Context, electionID, candidat
 	return &c, nil
 }
 
-const qDeleteCandidate = `
+const qSoftDeleteCandidate = `
+UPDATE candidates 
+SET deleted_at = NOW(), deleted_by_admin_id = $3, updated_at = NOW()
+WHERE election_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+const qHardDeleteCandidate = `
 DELETE FROM candidates WHERE election_id = $1 AND id = $2
 `
 
-// Delete deletes a candidate
-func (r *PgCandidateRepository) Delete(ctx context.Context, electionID, candidateID int64) error {
-	result, err := r.db.Exec(ctx, qDeleteCandidate, electionID, candidateID)
+// Delete soft deletes a candidate
+func (r *PgCandidateRepository) Delete(ctx context.Context, electionID, candidateID int64, adminID int64) error {
+	result, err := r.db.Exec(ctx, qSoftDeleteCandidate, electionID, candidateID, adminID)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrCandidateNotFound
+	}
+
+	return nil
+}
+
+// HardDelete permanently deletes a candidate (use with caution)
+func (r *PgCandidateRepository) HardDelete(ctx context.Context, electionID, candidateID int64) error {
+	result, err := r.db.Exec(ctx, qHardDeleteCandidate, electionID, candidateID)
 	if err != nil {
 		return err
 	}

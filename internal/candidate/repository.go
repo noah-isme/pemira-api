@@ -30,8 +30,11 @@ type CandidateRepository interface {
 	// Update updates an existing candidate
 	Update(ctx context.Context, electionID, candidateID int64, candidate *Candidate) (*Candidate, error)
 
-	// Delete deletes a candidate
-	Delete(ctx context.Context, electionID, candidateID int64) error
+	// Delete soft deletes a candidate (sets deleted_at)
+	Delete(ctx context.Context, electionID, candidateID int64, adminID int64) error
+	
+	// HardDelete permanently deletes a candidate (use with caution)
+	HardDelete(ctx context.Context, electionID, candidateID int64) error
 
 	// UpdateStatus updates candidate status
 	UpdateStatus(ctx context.Context, electionID, candidateID int64, status CandidateStatus) error

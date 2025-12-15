@@ -562,12 +562,12 @@ func (s *Service) AdminUpdateCandidate(
 	}, nil
 }
 
-// AdminDeleteCandidate deletes a candidate
+// AdminDeleteCandidate soft deletes a candidate
 func (s *Service) AdminDeleteCandidate(
 	ctx context.Context,
-	electionID, candidateID int64,
+	electionID, candidateID, adminID int64,
 ) error {
-	return s.repo.Delete(ctx, electionID, candidateID)
+	return s.repo.Delete(ctx, electionID, candidateID, adminID)
 }
 
 // AdminPublishCandidate publishes a candidate

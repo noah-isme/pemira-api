@@ -63,7 +63,7 @@ type AdminCandidateService interface {
 	AdminCreateCandidate(ctx context.Context, electionID int64, req AdminCreateCandidateRequest) (*CandidateDetailDTO, error)
 	AdminGetCandidate(ctx context.Context, electionID, candidateID int64) (*CandidateDetailDTO, error)
 	AdminUpdateCandidate(ctx context.Context, electionID, candidateID int64, req AdminUpdateCandidateRequest) (*CandidateDetailDTO, error)
-	AdminDeleteCandidate(ctx context.Context, electionID, candidateID int64) error
+	AdminDeleteCandidate(ctx context.Context, electionID, candidateID, adminID int64) error
 	AdminPublishCandidate(ctx context.Context, electionID, candidateID int64) (*CandidateDetailDTO, error)
 	AdminUnpublishCandidate(ctx context.Context, electionID, candidateID int64) (*CandidateDetailDTO, error)
 	UploadProfileMedia(ctx context.Context, candidateID int64, media CandidateMediaCreate) (*CandidateMedia, error)
@@ -240,12 +240,21 @@ func (h *AdminHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.AdminDeleteCandidate(ctx, electionID, candidateID); err != nil {
+	// Get admin ID from context
+	adminID, ok := ctxkeys.GetUserID(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "User ID tidak ditemukan.")
+		return
+	}
+
+	if err := h.svc.AdminDeleteCandidate(ctx, electionID, candidateID, adminID); err != nil {
 		h.handleError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	response.Success(w, http.StatusOK, map[string]string{
+		"message": "Kandidat berhasil dihapus (soft delete)",
+	})
 }
 
 // Publish menangani POST /admin/elections/{electionID}/candidates/{candidateID}/publish

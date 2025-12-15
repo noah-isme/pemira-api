@@ -24,6 +24,8 @@ type Candidate struct {
 	Status           CandidateStatus      `json:"status"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
+	DeletedAt        *time.Time           `json:"deleted_at,omitempty"`
+	DeletedByAdminID *int64               `json:"deleted_by_admin_id,omitempty"`
 }
 
 type CandidateMember struct {
