@@ -206,9 +206,10 @@ func main() {
 		r.Get("/elections", electionHandler.ListPublic)
 		r.Get("/elections/{electionID}/phases", electionHandler.GetPublicPhases)
 		r.Get("/elections/{electionID}/timeline", electionHandler.GetPublicPhases)
-		r.Get("/elections/{electionID}/candidates", candidateHandler.ListPublic)
+		r.Get("/elections/{electionID}/qr-codes", candidateHandler.ListWithQR)
 		r.Get("/elections/{electionID}/candidates/{candidateID}", candidateHandler.DetailPublic)
 		r.Get("/elections/{electionID}/candidates/{candidateID}/media/profile", candidateHandler.GetPublicProfileMedia)
+		r.Get("/elections/{electionID}/candidates", candidateHandler.ListPublic)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
@@ -406,7 +407,7 @@ func main() {
 				r.Post("/checkin/manual", tpsPanelHandler.ManualCheckin)
 				r.Get("/stats/timeline", tpsPanelHandler.Timeline)
 				r.Get("/logs", tpsPanelHandler.Logs)
-				
+
 				// Admin-only TPS management endpoints
 				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Get("/operators", tpsHandler.AdminListOperators)
 				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Post("/operators", tpsHandler.AdminCreateOperator)

@@ -7,8 +7,11 @@ Dokumentasi ini menjelaskan struktur payload JSON yang dibutuhkan frontend untuk
 
 ### Get Candidates with QR Codes
 **Method:** `GET`  
-**Path:** `/api/v1/elections/{election_id}/candidates`  
+**Path:** `/api/v1/elections/{election_id}/qr-codes`  
 **Authentication:** Optional (public endpoint)
+
+> Catatan: endpoint `GET /api/v1/elections/{election_id}/candidates` juga dapat mengembalikan `qr_code` per kandidat,
+> tetapi format responsnya berbeda (menggunakan wrapper `items`).
 
 ## Response Payload Structure
 
@@ -37,6 +40,7 @@ Dokumentasi ini menjelaskan struktur payload JSON yang dibutuhkan frontend untuk
         "id": 1,
         "token": "CAND01-ABC123XYZ",
         "url": "https://pemira.local/ballot-qr/CAND01-ABC123XYZ",
+        "payload": "PEMIRA-UNIWA|E:3|C:4|V:1",
         "version": 1,
         "is_active": true
       }
@@ -61,6 +65,7 @@ Dokumentasi ini menjelaskan struktur payload JSON yang dibutuhkan frontend untuk
         "id": 2,
         "token": "CAND02-DEF456UVW",
         "url": "https://pemira.local/ballot-qr/CAND02-DEF456UVW",
+        "payload": "PEMIRA-UNIWA|E:3|C:5|V:1",
         "version": 1,
         "is_active": true
       }
@@ -100,6 +105,7 @@ Dokumentasi ini menjelaskan struktur payload JSON yang dibutuhkan frontend untuk
 | `id` | integer | Yes | Unique ID QR code |
 | `token` | string | Yes | QR code token (untuk scanning) |
 | `url` | string | Yes | Full URL untuk generate QR image |
+| `payload` | string | Yes | String yang di-encode ke QR (dipakai di `/voting/tps/ballots/*`) |
 | `version` | integer | Yes | Versi QR code (untuk rotation) |
 | `is_active` | boolean | Yes | Status aktif QR code |
 
@@ -132,7 +138,7 @@ function CandidateQRCard({ candidate }) {
       {/* QR Code */}
       <div className="qr-code-container">
         <QRCode 
-          value={candidate.qr_code.token} 
+          value={candidate.qr_code.payload} 
           size={256}
           level="H"
         />
@@ -197,7 +203,7 @@ function PrintableBallot({ candidates }) {
             </div>
             <h3>{candidate.name}</h3>
             <QRCode 
-              value={candidate.qr_code.token}
+              value={candidate.qr_code.payload}
               size={200}
               level="H"
             />

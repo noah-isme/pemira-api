@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
-	"os"
 )
 
 // CandidateStatsMap maps candidate ID to their voting statistics
@@ -45,6 +45,16 @@ type CandidateListItemDTO struct {
 	StudyProgramName string         `json:"study_program_name"`
 	Status           string         `json:"status"`
 	Stats            CandidateStats `json:"stats"`
+	QRCode           *QRCodeDTO     `json:"qr_code,omitempty"`
+}
+
+type QRCodeDTO struct {
+	ID       int64  `json:"id"`
+	Token    string `json:"token"`
+	URL      string `json:"url"`
+	Payload  string `json:"payload"`
+	Version  int    `json:"version"`
+	IsActive bool   `json:"is_active"`
 }
 
 // CandidateDetailDTO represents a candidate in detail view
@@ -69,6 +79,7 @@ type CandidateDetailDTO struct {
 	SocialLinks      []SocialLink         `json:"social_links"`
 	Status           string               `json:"status"`
 	Stats            CandidateStats       `json:"stats"`
+	QRCode           *QRCodeDTO           `json:"qr_code,omitempty"`
 }
 
 // Pagination represents pagination metadata
@@ -108,16 +119,28 @@ func (s *Service) ListPublicCandidates(
 		return nil, Pagination{}, err
 	}
 
-	statsMap, err := s.stats.GetCandidateStats(ctx, electionID)
+	statsMap := CandidateStatsMap{}
+	if s.stats != nil {
+		var statsErr error
+		statsMap, statsErr = s.stats.GetCandidateStats(ctx, electionID)
+		if statsErr != nil {
+			slog.Warn("candidate stats provider failed; using empty stats", "election_id", electionID, "err", statsErr)
+			statsMap = CandidateStatsMap{}
+		}
+	}
+
+	// Get QR codes for all candidates in this election
+	qrCodesMap, err := s.repo.GetQRCodesByElection(ctx, electionID)
 	if err != nil {
-		// Fallback to empty stats if stats service fails
-		statsMap = CandidateStatsMap{}
+		slog.Warn("failed to fetch candidate QR codes; continuing without QR data", "election_id", electionID, "err", err)
+		// Fallback to empty map if QR codes fetch fails
+		qrCodesMap = make(map[int64]*CandidateQRCode)
 	}
 
 	dtos := make([]CandidateListItemDTO, 0, len(candidates))
 	for _, c := range candidates {
 		stats := statsMap[c.ID]
-		dtos = append(dtos, CandidateListItemDTO{
+		dto := CandidateListItemDTO{
 			ID:               c.ID,
 			ElectionID:       c.ElectionID,
 			Number:           c.Number,
@@ -130,7 +153,21 @@ func (s *Service) ListPublicCandidates(
 			StudyProgramName: c.StudyProgramName,
 			Status:           string(c.Status),
 			Stats:            stats,
-		})
+		}
+
+		// Add QR code if exists
+		if qrCode, exists := qrCodesMap[c.ID]; exists {
+			dto.QRCode = &QRCodeDTO{
+				ID:       qrCode.ID,
+				Token:    qrCode.QRToken,
+				URL:      fmt.Sprintf("https://pemira.local/ballot-qr/%s", qrCode.QRToken),
+				Payload:  buildBallotQRPayload(qrCode.ElectionID, qrCode.CandidateID, qrCode.Version),
+				Version:  qrCode.Version,
+				IsActive: qrCode.IsActive,
+			}
+		}
+
+		dtos = append(dtos, dto)
 	}
 
 	totalPages := int64(0)
@@ -164,9 +201,14 @@ func (s *Service) GetPublicCandidateDetail(
 	}
 
 	// Get stats for this candidate
-	statsMap, err := s.stats.GetCandidateStats(ctx, electionID)
-	if err != nil {
-		statsMap = CandidateStatsMap{}
+	statsMap := CandidateStatsMap{}
+	if s.stats != nil {
+		var statsErr error
+		statsMap, statsErr = s.stats.GetCandidateStats(ctx, electionID)
+		if statsErr != nil {
+			slog.Warn("candidate stats provider failed; using empty stats", "election_id", electionID, "candidate_id", candidateID, "err", statsErr)
+			statsMap = CandidateStatsMap{}
+		}
 	}
 	stats := statsMap[c.ID]
 
@@ -193,7 +235,23 @@ func (s *Service) GetPublicCandidateDetail(
 		Stats:            stats,
 	}
 
+	// Add active QR code (if any) for frontend to generate ballot QR image.
+	if qrCode, err := s.repo.GetActiveQRCode(ctx, c.ID); err == nil && qrCode != nil {
+		dto.QRCode = &QRCodeDTO{
+			ID:       qrCode.ID,
+			Token:    qrCode.QRToken,
+			URL:      fmt.Sprintf("https://pemira.local/ballot-qr/%s", qrCode.QRToken),
+			Payload:  buildBallotQRPayload(qrCode.ElectionID, qrCode.CandidateID, qrCode.Version),
+			Version:  qrCode.Version,
+			IsActive: qrCode.IsActive,
+		}
+	}
+
 	return dto, nil
+}
+
+func buildBallotQRPayload(electionID, candidateID int64, version int) string {
+	return fmt.Sprintf("PEMIRA-UNIWA|E:%d|C:%d|V:%d", electionID, candidateID, version)
 }
 
 // ptrStatus creates a pointer to CandidateStatus
@@ -228,11 +286,7 @@ func (s *Service) AdminListCandidates(
 
 	candidates, total, err := s.repo.ListByElection(ctx, electionID, filter)
 	if err != nil {
-		// Log error to file
-		if f, ferr := os.OpenFile("/tmp/service_error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); ferr == nil {
-			defer f.Close()
-			f.WriteString(fmt.Sprintf("AdminListCandidates - ListByElection error: %v\n", err))
-		}
+		slog.Error("AdminListCandidates: ListByElection failed", "election_id", electionID, "err", err)
 		return nil, Pagination{}, err
 	}
 

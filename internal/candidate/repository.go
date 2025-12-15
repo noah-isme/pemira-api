@@ -46,6 +46,20 @@ type CandidateRepository interface {
 	GetMedia(ctx context.Context, candidateID int64, mediaID string) (*CandidateMedia, error)
 	DeleteMedia(ctx context.Context, candidateID int64, mediaID string) error
 	ListMediaMeta(ctx context.Context, candidateID int64) ([]CandidateMediaMeta, error)
+
+	// QR Code operations
+	GetActiveQRCode(ctx context.Context, candidateID int64) (*CandidateQRCode, error)
+	GetQRCodesByElection(ctx context.Context, electionID int64) (map[int64]*CandidateQRCode, error)
+}
+
+// CandidateQRCode represents a QR code for a candidate
+type CandidateQRCode struct {
+	ID          int64  `json:"id"`
+	ElectionID  int64  `json:"election_id"`
+	CandidateID int64  `json:"candidate_id"`
+	Version     int    `json:"version"`
+	QRToken     string `json:"qr_token"`
+	IsActive    bool   `json:"is_active"`
 }
 
 // Common errors

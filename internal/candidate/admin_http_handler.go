@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/gabriel-vasile/mimetype"
@@ -149,6 +149,14 @@ func (h *AdminHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.UnprocessableEntity(w, "VALIDATION_ERROR", "number dan name wajib diisi.")
 		return
 	}
+
+	// Debug logging
+	slog.Info("Creating candidate via API",
+		"number", req.Number,
+		"name", req.Name,
+		"missions_len", len(req.Missions),
+		"programs_len", len(req.MainPrograms),
+		"social_links_len", len(req.SocialLinks))
 
 	dto, err := h.svc.AdminCreateCandidate(ctx, electionID, req)
 	if err != nil {
@@ -397,7 +405,7 @@ func (h *AdminHandler) GetProfileMedia(w http.ResponseWriter, r *http.Request) {
 		if resp.ContentLength > 0 {
 			w.Header().Set("Content-Length", strconv.FormatInt(resp.ContentLength, 10))
 		}
-		
+
 		// Stream blob to client
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, resp.Body)
@@ -649,13 +657,8 @@ func (h *AdminHandler) handleError(w http.ResponseWriter, err error) {
 		response.BadRequest(w, "INVALID_REQUEST", "Slot media tidak valid.")
 
 	default:
-		// TODO: log internal error dengan logger
+		slog.Error("candidate admin handler error", "err", err)
 		log.Printf("INTERNAL_ERROR in candidate handler: %v", err)
-		// Also log to file for debugging
-		if f, ferr := os.OpenFile("/tmp/handler_error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); ferr == nil {
-			defer f.Close()
-			f.WriteString(fmt.Sprintf("INTERNAL_ERROR in candidate handler: %v\n", err))
-		}
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }

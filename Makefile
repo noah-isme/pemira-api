@@ -1,4 +1,4 @@
-.PHONY: help dev build test lint docker-up docker-down migrate-up migrate-down migrate-create sqlc-generate
+.PHONY: help dev build test lint docker-up docker-down sqlc-generate
 
 help:
 	@echo "Available commands:"
@@ -8,9 +8,6 @@ help:
 	@echo "  make lint            - Run linter"
 	@echo "  make docker-up       - Start docker services"
 	@echo "  make docker-down     - Stop docker services"
-	@echo "  make migrate-up      - Run migrations up"
-	@echo "  make migrate-down    - Run migrations down"
-	@echo "  make migrate-create  - Create new migration"
 	@echo "  make sqlc-generate   - Generate sqlc code"
 
 dev:
@@ -36,18 +33,6 @@ docker-up:
 docker-down:
 	@echo "Stopping docker services..."
 	@docker-compose down
-
-migrate-up:
-	@echo "Running migrations up..."
-	@goose -dir migrations postgres "$(DATABASE_URL)" up
-
-migrate-down:
-	@echo "Running migrations down..."
-	@goose -dir migrations postgres "$(DATABASE_URL)" down
-
-migrate-create:
-	@echo "Creating migration: $(name)"
-	@goose -dir migrations create $(name) sql
 
 sqlc-generate:
 	@echo "Generating sqlc code..."

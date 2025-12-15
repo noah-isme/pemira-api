@@ -13,9 +13,13 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /bin/api ./cmd/api
 
 # Runner stage
-FROM gcr.io/distroless/base-debian12
+FROM alpine:latest
 
 WORKDIR /
+
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -g 1000 nonroot && \
+    adduser -D -u 1000 -G nonroot nonroot
 
 COPY --from=builder /bin/api /api
 COPY --from=builder /app/migrations /migrations

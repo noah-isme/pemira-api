@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	storage_go "github.com/supabase-community/storage-go"
 )
@@ -30,7 +35,34 @@ election_id,
 number,
 name,
 photo_url,
-photo_media_id,
+photo_media_id::text AS photo_media_id,
+short_bio,
+long_bio,
+tagline,
+faculty_name,
+study_program_name,
+cohort_year,
+vision,
+missions,
+main_programs,
+media,
+social_links,
+status,
+created_at,
+updated_at
+FROM candidates
+WHERE election_id = $1
+`
+
+// Compatibility query when candidates.photo_media_id column does not exist (pre-migration 016).
+const qListCandidatesBaseNoPhotoMedia = `
+SELECT
+id,
+election_id,
+number,
+name,
+photo_url,
+NULL::text AS photo_media_id,
 short_bio,
 long_bio,
 tagline,
@@ -100,7 +132,17 @@ OFFSET $` + fmt.Sprint(len(args)+2)
 
 	rows, err := r.db.Query(ctx, listSQL, args...)
 	if err != nil {
-		return nil, 0, err
+		if isUndefinedColumn(err, "photo_media_id") {
+			listSQL = qListCandidatesBaseNoPhotoMedia + where + `
+ORDER BY number ASC
+LIMIT $` + fmt.Sprint(len(args)-1) + `
+OFFSET $` + fmt.Sprint(len(args))
+			// args already has limit, offset at the end
+			rows, err = r.db.Query(ctx, listSQL, args...)
+		}
+		if err != nil {
+			return nil, 0, err
+		}
 	}
 	defer rows.Close()
 
@@ -126,7 +168,33 @@ election_id,
 number,
 name,
 photo_url,
-photo_media_id,
+photo_media_id::text AS photo_media_id,
+short_bio,
+long_bio,
+tagline,
+faculty_name,
+study_program_name,
+cohort_year,
+vision,
+missions,
+main_programs,
+media,
+social_links,
+status,
+created_at,
+updated_at
+FROM candidates
+WHERE election_id = $1 AND id = $2
+`
+
+const qGetCandidateByIDNoPhotoMedia = `
+SELECT
+id,
+election_id,
+number,
+name,
+photo_url,
+NULL::text AS photo_media_id,
 short_bio,
 long_bio,
 tagline,
@@ -152,7 +220,33 @@ election_id,
 number,
 name,
 photo_url,
-photo_media_id,
+photo_media_id::text AS photo_media_id,
+short_bio,
+long_bio,
+tagline,
+faculty_name,
+study_program_name,
+cohort_year,
+vision,
+missions,
+main_programs,
+media,
+social_links,
+status,
+created_at,
+updated_at
+FROM candidates
+WHERE id = $1
+`
+
+const qGetCandidateByCandidateIDNoPhotoMedia = `
+SELECT
+id,
+election_id,
+number,
+name,
+photo_url,
+NULL::text AS photo_media_id,
 short_bio,
 long_bio,
 tagline,
@@ -177,8 +271,11 @@ func (r *PgCandidateRepository) GetByID(
 	electionID, candidateID int64,
 ) (*Candidate, error) {
 	row := r.db.QueryRow(ctx, qGetCandidateByID, electionID, candidateID)
-
 	c, err := scanCandidateRow(row)
+	if err != nil && isUndefinedColumn(err, "photo_media_id") {
+		row = r.db.QueryRow(ctx, qGetCandidateByIDNoPhotoMedia, electionID, candidateID)
+		c, err = scanCandidateRow(row)
+	}
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrCandidateNotFound
@@ -195,6 +292,10 @@ func (r *PgCandidateRepository) GetByCandidateID(
 ) (*Candidate, error) {
 	row := r.db.QueryRow(ctx, qGetCandidateByCandidateID, candidateID)
 	c, err := scanCandidateRow(row)
+	if err != nil && isUndefinedColumn(err, "photo_media_id") {
+		row = r.db.QueryRow(ctx, qGetCandidateByCandidateIDNoPhotoMedia, candidateID)
+		c, err = scanCandidateRow(row)
+	}
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrCandidateNotFound
@@ -208,21 +309,22 @@ func (r *PgCandidateRepository) GetByCandidateID(
 func scanCandidate(rows pgx.Rows) (Candidate, error) {
 	var c Candidate
 	var missionsRaw, mainProgramsRaw, mediaRaw, socialLinksRaw any
+	var photoURL, shortBio, longBio, tagline, facultyName, studyProgramName, vision *string
 
 	if err := rows.Scan(
 		&c.ID,
 		&c.ElectionID,
 		&c.Number,
 		&c.Name,
-		&c.PhotoURL,
+		&photoURL,
 		&c.PhotoMediaID,
-		&c.ShortBio,
-		&c.LongBio,
-		&c.Tagline,
-		&c.FacultyName,
-		&c.StudyProgramName,
+		&shortBio,
+		&longBio,
+		&tagline,
+		&facultyName,
+		&studyProgramName,
 		&c.CohortYear,
-		&c.Vision,
+		&vision,
 		&missionsRaw,
 		&mainProgramsRaw,
 		&mediaRaw,
@@ -247,6 +349,14 @@ func scanCandidate(rows pgx.Rows) (Candidate, error) {
 		return Candidate{}, err
 	}
 
+	c.PhotoURL = derefString(photoURL)
+	c.ShortBio = derefString(shortBio)
+	c.LongBio = derefString(longBio)
+	c.Tagline = derefString(tagline)
+	c.FacultyName = derefString(facultyName)
+	c.StudyProgramName = derefString(studyProgramName)
+	c.Vision = derefString(vision)
+
 	return c, nil
 }
 
@@ -254,21 +364,22 @@ func scanCandidate(rows pgx.Rows) (Candidate, error) {
 func scanCandidateRow(row pgx.Row) (Candidate, error) {
 	var c Candidate
 	var missionsRaw, mainProgramsRaw, mediaRaw, socialLinksRaw any
+	var photoURL, shortBio, longBio, tagline, facultyName, studyProgramName, vision *string
 
 	err := row.Scan(
 		&c.ID,
 		&c.ElectionID,
 		&c.Number,
 		&c.Name,
-		&c.PhotoURL,
+		&photoURL,
 		&c.PhotoMediaID,
-		&c.ShortBio,
-		&c.LongBio,
-		&c.Tagline,
-		&c.FacultyName,
-		&c.StudyProgramName,
+		&shortBio,
+		&longBio,
+		&tagline,
+		&facultyName,
+		&studyProgramName,
 		&c.CohortYear,
-		&c.Vision,
+		&vision,
 		&missionsRaw,
 		&mainProgramsRaw,
 		&mediaRaw,
@@ -293,6 +404,14 @@ func scanCandidateRow(row pgx.Row) (Candidate, error) {
 	if err := scanJSON(socialLinksRaw, &c.SocialLinks); err != nil {
 		return Candidate{}, err
 	}
+
+	c.PhotoURL = derefString(photoURL)
+	c.ShortBio = derefString(shortBio)
+	c.LongBio = derefString(longBio)
+	c.Tagline = derefString(tagline)
+	c.FacultyName = derefString(facultyName)
+	c.StudyProgramName = derefString(studyProgramName)
+	c.Vision = derefString(vision)
 
 	return c, nil
 }
@@ -327,6 +446,35 @@ func scanJSON[T any](src any, dest *T) error {
 
 	err := json.Unmarshal(b, dest)
 	if err != nil {
+		trimmed := bytes.TrimSpace(b)
+		destType := reflect.TypeOf(*dest)
+
+		if destType != nil {
+			if destType.Kind() == reflect.Struct && bytes.Equal(trimmed, []byte("[]")) {
+				slog.Warn("scanJSON: expected object, got array; using zero value", "dest_type", destType.String())
+				var zero T
+				*dest = zero
+				return nil
+			}
+			if destType.Kind() == reflect.Slice && bytes.Equal(trimmed, []byte("{}")) {
+				slog.Warn("scanJSON: expected array, got object; using empty value", "dest_type", destType.String())
+				var zero T
+				*dest = zero
+				return nil
+			}
+			if destType.Kind() == reflect.Slice && destType.Elem().Kind() == reflect.String && len(trimmed) > 0 && trimmed[0] == '"' {
+				var single string
+				if uerr := json.Unmarshal(trimmed, &single); uerr == nil {
+					destValue := reflect.ValueOf(dest).Elem()
+					slice := reflect.MakeSlice(destType, 1, 1)
+					slice.Index(0).SetString(single)
+					destValue.Set(slice)
+					slog.Warn("scanJSON: expected string array, got string; wrapped into array", "dest_type", destType.String())
+					return nil
+				}
+			}
+		}
+
 		logJSONError(fmt.Errorf("scanJSON unmarshal error: %w, data: %s", err, string(b)))
 		return err
 	}
@@ -334,31 +482,82 @@ func scanJSON[T any](src any, dest *T) error {
 }
 
 func logJSONError(err error) {
-	if f, ferr := os.OpenFile("/tmp/scanJSON_error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); ferr == nil {
-		defer f.Close()
-		f.WriteString(fmt.Sprintf("%v\n", err))
+	slog.Error("candidate JSON scan failed", "err", err)
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
 	}
+	return *s
+}
+
+func isUndefinedColumn(err error, column string) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	if pgErr.Code != "42703" { // undefined_column
+		return false
+	}
+	if column == "" {
+		return true
+	}
+	if strings.EqualFold(pgErr.ColumnName, column) {
+		return true
+	}
+	// ColumnName isn't always populated depending on where the error happened.
+	return strings.Contains(pgErr.Message, fmt.Sprintf("column \"%s\"", column))
 }
 
 const qCreateCandidate = `
 INSERT INTO candidates (
-election_id, number, name, photo_url, photo_media_id, short_bio, long_bio, tagline,
+election_id, number, name, photo_url, short_bio, long_bio, tagline,
 faculty_name, study_program_name, cohort_year, vision, missions,
-main_programs, media, social_links, status, created_at, updated_at, updated_by_admin_id
+main_programs, media, social_links, status
 ) VALUES (
-$1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW(), NULL
+$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )
-RETURNING id, election_id, number, name, photo_url, photo_media_id, short_bio, long_bio, tagline,
+RETURNING id, election_id, number, name, photo_url, photo_media_id::text AS photo_media_id, short_bio, long_bio, tagline,
 faculty_name, study_program_name, cohort_year, vision, missions, main_programs,
 media, social_links, status, created_at, updated_at
 `
 
 // Create creates a new candidate
 func (r *PgCandidateRepository) Create(ctx context.Context, candidate *Candidate) (*Candidate, error) {
-	missionsJSON, _ := json.Marshal(candidate.Missions)
-	mainProgramsJSON, _ := json.Marshal(candidate.MainPrograms)
-	mediaJSON, _ := json.Marshal(candidate.Media)
-	socialLinksJSON, _ := json.Marshal(candidate.SocialLinks)
+	// Ensure non-nil slices and valid JSON
+	if candidate.Missions == nil {
+		candidate.Missions = []string{}
+	}
+	if candidate.MainPrograms == nil {
+		candidate.MainPrograms = []MainProgram{}
+	}
+	if candidate.SocialLinks == nil {
+		candidate.SocialLinks = []SocialLink{}
+	}
+
+	missionsJSON, err := json.Marshal(candidate.Missions)
+	if err != nil {
+		return nil, fmt.Errorf("marshal missions: %w", err)
+	}
+	mainProgramsJSON, err := json.Marshal(candidate.MainPrograms)
+	if err != nil {
+		return nil, fmt.Errorf("marshal main_programs: %w", err)
+	}
+	mediaJSON, err := json.Marshal(candidate.Media)
+	if err != nil {
+		return nil, fmt.Errorf("marshal media: %w", err)
+	}
+	socialLinksJSON, err := json.Marshal(candidate.SocialLinks)
+	if err != nil {
+		return nil, fmt.Errorf("marshal social_links: %w", err)
+	}
+	
+	slog.Info("Creating candidate", 
+		"missions", string(missionsJSON),
+		"mainPrograms", string(mainProgramsJSON),
+		"media", string(mediaJSON),
+		"socialLinks", string(socialLinksJSON))
 
 	row := r.db.QueryRow(ctx, qCreateCandidate,
 		candidate.ElectionID,
@@ -372,16 +571,17 @@ func (r *PgCandidateRepository) Create(ctx context.Context, candidate *Candidate
 		candidate.StudyProgramName,
 		candidate.CohortYear,
 		candidate.Vision,
-		missionsJSON,
-		mainProgramsJSON,
-		mediaJSON,
-		socialLinksJSON,
+		string(missionsJSON),
+		string(mainProgramsJSON),
+		string(mediaJSON),
+		string(socialLinksJSON),
 		candidate.Status,
 	)
 
 	c, err := scanCandidateRow(row)
 	if err != nil {
-		return nil, err
+		slog.Error("Failed to scan candidate row after insert", "error", err)
+		return nil, fmt.Errorf("scan candidate: %w", err)
 	}
 
 	return &c, nil
@@ -406,7 +606,7 @@ social_links = $16,
 status = $17,
 updated_at = NOW()
 WHERE election_id = $1 AND id = $2
-RETURNING id, election_id, number, name, photo_url, photo_media_id, short_bio, long_bio, tagline,
+RETURNING id, election_id, number, name, photo_url, photo_media_id::text AS photo_media_id, short_bio, long_bio, tagline,
 faculty_name, study_program_name, cohort_year, vision, missions, main_programs,
 media, social_links, status, created_at, updated_at
 `
@@ -756,7 +956,7 @@ func newSupabaseStorage() (*supabaseStorage, error) {
 	if url == "" || key == "" {
 		return nil, fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY required")
 	}
-	
+
 	// Add apikey header for Supabase auth
 	headers := map[string]string{
 		"apikey": key,
@@ -766,41 +966,108 @@ func newSupabaseStorage() (*supabaseStorage, error) {
 }
 
 type supabaseStorage struct {
-client *storage_go.Client
-url    string
+	client *storage_go.Client
+	url    string
 }
 
 func (s *supabaseStorage) Upload(ctx context.Context, bucket, path string, data []byte, contentType string) (string, error) {
-reader := bytes.NewReader(data)
-_, err := s.client.UploadFile(bucket, path, reader)
-if err != nil {
-return "", err
-}
-return fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.url, bucket, path), nil
+	reader := bytes.NewReader(data)
+	_, err := s.client.UploadFile(bucket, path, reader)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.url, bucket, path), nil
 }
 
 func (s *supabaseStorage) Delete(ctx context.Context, bucket, path string) error {
-_, err := s.client.RemoveFile(bucket, []string{path})
-return err
+	_, err := s.client.RemoveFile(bucket, []string{path})
+	return err
 }
 
 func getExtension(contentType string) string {
-switch contentType {
-case "image/jpeg", "image/jpg":
-return ".jpg"
-case "image/png":
-return ".png"
-case "image/webp":
-return ".webp"
-default:
-return ".bin"
-}
+	switch contentType {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".bin"
+	}
 }
 
 func getMediaBucket() string {
-bucket := os.Getenv("SUPABASE_MEDIA_BUCKET")
-if bucket == "" {
-return "pemira"
+	bucket := os.Getenv("SUPABASE_MEDIA_BUCKET")
+	if bucket == "" {
+		return "pemira"
+	}
+	return bucket
 }
-return bucket
+
+// GetActiveQRCode returns the active QR code for a candidate
+func (r *PgCandidateRepository) GetActiveQRCode(ctx context.Context, candidateID int64) (*CandidateQRCode, error) {
+	query := `
+		SELECT id, election_id, candidate_id, version, qr_token, is_active
+		FROM candidate_qr_codes
+		WHERE candidate_id = $1 AND is_active = true
+		LIMIT 1
+	`
+
+	var qr CandidateQRCode
+	err := r.db.QueryRow(ctx, query, candidateID).Scan(
+		&qr.ID,
+		&qr.ElectionID,
+		&qr.CandidateID,
+		&qr.Version,
+		&qr.QRToken,
+		&qr.IsActive,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // No QR code found
+		}
+		return nil, err
+	}
+
+	return &qr, nil
+}
+
+// GetQRCodesByElection returns all active QR codes for candidates in an election
+func (r *PgCandidateRepository) GetQRCodesByElection(ctx context.Context, electionID int64) (map[int64]*CandidateQRCode, error) {
+	query := `
+		SELECT id, election_id, candidate_id, version, qr_token, is_active
+		FROM candidate_qr_codes
+		WHERE election_id = $1 AND is_active = true
+		ORDER BY candidate_id
+	`
+
+	rows, err := r.db.Query(ctx, query, electionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	qrCodes := make(map[int64]*CandidateQRCode)
+	for rows.Next() {
+		var qr CandidateQRCode
+		err := rows.Scan(
+			&qr.ID,
+			&qr.ElectionID,
+			&qr.CandidateID,
+			&qr.Version,
+			&qr.QRToken,
+			&qr.IsActive,
+		)
+		if err != nil {
+			return nil, err
+		}
+		qrCodes[qr.CandidateID] = &qr
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return qrCodes, nil
 }
