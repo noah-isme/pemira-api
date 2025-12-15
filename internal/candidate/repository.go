@@ -7,10 +7,11 @@ import (
 
 // Filter represents query filters for listing candidates
 type Filter struct {
-	Status *CandidateStatus
-	Search string
-	Limit  int
-	Offset int
+	Status  *CandidateStatus   // Single status filter (legacy)
+	Statuses []CandidateStatus // Multiple status filter (use this if provided)
+	Search  string
+	Limit   int
+	Offset  int
 }
 
 // CandidateRepository defines the interface for candidate data access

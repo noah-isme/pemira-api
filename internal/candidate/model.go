@@ -6,10 +6,14 @@ import "time"
 type CandidateStatus string
 
 const (
-	CandidateStatusPending   CandidateStatus = "PENDING"
-	CandidateStatusApproved  CandidateStatus = "APPROVED"
-	CandidateStatusRejected  CandidateStatus = "REJECTED"
-	CandidateStatusWithdrawn CandidateStatus = "WITHDRAWN"
+	CandidateStatusPending   CandidateStatus = "PENDING"   // Under review
+	CandidateStatusApproved  CandidateStatus = "APPROVED"  // Approved and visible to public (legacy, keep for backward compatibility)
+	CandidateStatusPublished CandidateStatus = "PUBLISHED" // Published and visible to public (preferred)
+	CandidateStatusDraft     CandidateStatus = "DRAFT"     // Draft, not yet submitted for review
+	CandidateStatusHidden    CandidateStatus = "HIDDEN"    // Temporarily hidden from public view
+	CandidateStatusRejected  CandidateStatus = "REJECTED"  // Rejected by admin
+	CandidateStatusWithdrawn CandidateStatus = "WITHDRAWN" // Withdrawn by candidate
+	CandidateStatusArchived  CandidateStatus = "ARCHIVED"  // Archived, no longer active
 )
 
 // IsValid checks whether the status is one of the supported enum values.
@@ -17,8 +21,12 @@ func (s CandidateStatus) IsValid() bool {
 	switch s {
 	case CandidateStatusPending,
 		CandidateStatusApproved,
+		CandidateStatusPublished,
+		CandidateStatusDraft,
+		CandidateStatusHidden,
 		CandidateStatusRejected,
-		CandidateStatusWithdrawn:
+		CandidateStatusWithdrawn,
+		CandidateStatusArchived:
 		return true
 	}
 	return false

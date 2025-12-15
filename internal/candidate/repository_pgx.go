@@ -94,8 +94,20 @@ func (r *PgCandidateRepository) ListByElection(
 	args := []any{electionID}
 	where := ""
 
-	// status filter
-	if filter.Status != nil {
+	// status filter - support multiple statuses
+	if len(filter.Statuses) > 0 {
+		// Use IN clause with multiple placeholders
+		placeholders := ""
+		for i, s := range filter.Statuses {
+			args = append(args, string(s))
+			if i > 0 {
+				placeholders += ", "
+			}
+			placeholders += fmt.Sprintf("$%d", len(args))
+		}
+		where += fmt.Sprintf(" AND status IN (%s)", placeholders)
+	} else if filter.Status != nil {
+		// Legacy single status filter
 		args = append(args, *filter.Status)
 		where += fmt.Sprintf(" AND status = $%d", len(args))
 	}
@@ -613,6 +625,17 @@ media, social_links, status, created_at, updated_at
 
 // Update updates an existing candidate
 func (r *PgCandidateRepository) Update(ctx context.Context, electionID, candidateID int64, candidate *Candidate) (*Candidate, error) {
+	// Ensure non-nil slices
+	if candidate.Missions == nil {
+		candidate.Missions = []string{}
+	}
+	if candidate.MainPrograms == nil {
+		candidate.MainPrograms = []MainProgram{}
+	}
+	if candidate.SocialLinks == nil {
+		candidate.SocialLinks = []SocialLink{}
+	}
+
 	missionsJSON, _ := json.Marshal(candidate.Missions)
 	mainProgramsJSON, _ := json.Marshal(candidate.MainPrograms)
 	mediaJSON, _ := json.Marshal(candidate.Media)
@@ -631,10 +654,10 @@ func (r *PgCandidateRepository) Update(ctx context.Context, electionID, candidat
 		candidate.StudyProgramName,
 		candidate.CohortYear,
 		candidate.Vision,
-		missionsJSON,
-		mainProgramsJSON,
-		mediaJSON,
-		socialLinksJSON,
+		string(missionsJSON),
+		string(mainProgramsJSON),
+		string(mediaJSON),
+		string(socialLinksJSON),
 		candidate.Status,
 	)
 

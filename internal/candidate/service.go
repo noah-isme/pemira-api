@@ -93,7 +93,7 @@ type Pagination struct {
 // ErrCandidateNotPublished is returned when trying to access unpublished candidate
 var ErrCandidateNotPublished = errors.New("candidate not published")
 
-// ListPublicCandidates returns approved candidates for student view
+// ListPublicCandidates returns approved/published candidates for student view
 func (s *Service) ListPublicCandidates(
 	ctx context.Context,
 	electionID int64,
@@ -107,11 +107,12 @@ func (s *Service) ListPublicCandidates(
 		limit = 10
 	}
 
+	// Show both APPROVED (legacy) and PUBLISHED candidates to public
 	filter := Filter{
-		Status: ptrStatus(CandidateStatusApproved),
-		Search: search,
-		Limit:  limit,
-		Offset: (page - 1) * limit,
+		Statuses: []CandidateStatus{CandidateStatusApproved, CandidateStatusPublished},
+		Search:   search,
+		Limit:    limit,
+		Offset:   (page - 1) * limit,
 	}
 
 	candidates, total, err := s.repo.ListByElection(ctx, electionID, filter)
