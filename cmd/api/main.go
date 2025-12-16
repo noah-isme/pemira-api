@@ -314,6 +314,7 @@ func main() {
 						r.Delete("/{candidateID}", candidateAdminHandler.Delete)
 						r.Post("/{candidateID}/publish", candidateAdminHandler.Publish)
 						r.Post("/{candidateID}/unpublish", candidateAdminHandler.Unpublish)
+						r.Post("/{candidateID}/qr/generate", candidateAdminHandler.GenerateQRCode)
 					})
 
 					// DPT management

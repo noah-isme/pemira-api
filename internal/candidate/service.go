@@ -197,7 +197,7 @@ func (s *Service) GetPublicCandidateDetail(
 	}
 
 	// Only published candidates are accessible to students
-	if c.Status != CandidateStatusApproved {
+	if c.Status != CandidateStatusApproved && c.Status != CandidateStatusPublished {
 		return nil, ErrCandidateNotPublished
 	}
 
@@ -297,10 +297,16 @@ func (s *Service) AdminListCandidates(
 		statsMap = CandidateStatsMap{}
 	}
 
+	// Get QR codes for all candidates in this election
+	qrCodesMap, err := s.repo.GetQRCodesByElection(ctx, electionID)
+	if err != nil {
+		qrCodesMap = make(map[int64]*CandidateQRCode)
+	}
+
 	dtos := make([]CandidateDetailDTO, 0, len(candidates))
 	for _, c := range candidates {
 		stats := statsMap[c.ID]
-		dtos = append(dtos, CandidateDetailDTO{
+		dto := CandidateDetailDTO{
 			ID:               c.ID,
 			ElectionID:       c.ElectionID,
 			Number:           c.Number,
@@ -321,7 +327,21 @@ func (s *Service) AdminListCandidates(
 			SocialLinks:      c.SocialLinks,
 			Status:           string(c.Status),
 			Stats:            stats,
-		})
+		}
+
+		// Add QR code if available
+		if qrCode, exists := qrCodesMap[c.ID]; exists {
+			dto.QRCode = &QRCodeDTO{
+				ID:       qrCode.ID,
+				Token:    qrCode.QRToken,
+				URL:      fmt.Sprintf("https://pemira.local/ballot-qr/%s", qrCode.QRToken),
+				Payload:  buildBallotQRPayload(qrCode.ElectionID, qrCode.CandidateID, qrCode.Version),
+				Version:  qrCode.Version,
+				IsActive: qrCode.IsActive,
+			}
+		}
+
+		dtos = append(dtos, dto)
 	}
 
 	totalPages := int64(0)
@@ -432,7 +452,7 @@ func (s *Service) AdminGetCandidate(
 	statsMap, _ := s.stats.GetCandidateStats(ctx, electionID)
 	stats := statsMap[c.ID]
 
-	return &CandidateDetailDTO{
+	dto := &CandidateDetailDTO{
 		ID:               c.ID,
 		ElectionID:       c.ElectionID,
 		Number:           c.Number,
@@ -453,7 +473,21 @@ func (s *Service) AdminGetCandidate(
 		SocialLinks:      c.SocialLinks,
 		Status:           string(c.Status),
 		Stats:            stats,
-	}, nil
+	}
+
+	// Get QR code if available
+	if qrCode, err := s.repo.GetActiveQRCode(ctx, c.ID); err == nil && qrCode != nil {
+		dto.QRCode = &QRCodeDTO{
+			ID:       qrCode.ID,
+			Token:    qrCode.QRToken,
+			URL:      fmt.Sprintf("https://pemira.local/ballot-qr/%s", qrCode.QRToken),
+			Payload:  buildBallotQRPayload(qrCode.ElectionID, qrCode.CandidateID, qrCode.Version),
+			Version:  qrCode.Version,
+			IsActive: qrCode.IsActive,
+		}
+	}
+
+	return dto, nil
 }
 
 // AdminUpdateCandidate updates an existing candidate
@@ -570,7 +604,7 @@ func (s *Service) AdminDeleteCandidate(
 	return s.repo.Delete(ctx, electionID, candidateID, adminID)
 }
 
-// AdminPublishCandidate publishes a candidate
+// AdminPublishCandidate publishes a candidate and auto-generates QR code if not exists
 func (s *Service) AdminPublishCandidate(
 	ctx context.Context,
 	electionID, candidateID int64,
@@ -578,6 +612,16 @@ func (s *Service) AdminPublishCandidate(
 	err := s.repo.UpdateStatus(ctx, electionID, candidateID, CandidateStatusApproved)
 	if err != nil {
 		return nil, err
+	}
+
+	// Auto-generate QR code if not exists
+	existingQR, _ := s.repo.GetActiveQRCode(ctx, candidateID)
+	if existingQR == nil {
+		_, err = s.repo.CreateQRCode(ctx, electionID, candidateID)
+		if err != nil {
+			slog.Warn("Failed to auto-generate QR code on publish", "candidate_id", candidateID, "error", err)
+			// Don't fail the publish operation if QR generation fails
+		}
 	}
 
 	return s.AdminGetCandidate(ctx, electionID, candidateID)
@@ -593,6 +637,27 @@ func (s *Service) AdminUnpublishCandidate(
 		return nil, err
 	}
 
+	return s.AdminGetCandidate(ctx, electionID, candidateID)
+}
+
+// GenerateQRCode generates or regenerates QR code for a candidate
+func (s *Service) GenerateQRCode(
+	ctx context.Context,
+	electionID, candidateID int64,
+) (*CandidateDetailDTO, error) {
+	// Verify candidate exists
+	_, err := s.repo.GetByID(ctx, electionID, candidateID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate QR code
+	_, err = s.repo.CreateQRCode(ctx, electionID, candidateID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate QR code: %w", err)
+	}
+
+	// Return updated candidate with QR code
 	return s.AdminGetCandidate(ctx, electionID, candidateID)
 }
 

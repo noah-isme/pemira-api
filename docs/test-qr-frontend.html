@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test QR Code - Pemira API</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .login-section, .candidate-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .candidate-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .candidate-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .candidate-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .candidate-header {
+            margin-bottom: 15px;
+        }
+
+        .candidate-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .candidate-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #333;
+            margin-top: 10px;
+        }
+
+        .candidate-vision {
+            color: #666;
+            margin: 10px 0;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .qr-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 15px;
+            border: 2px solid #667eea;
+        }
+
+        .qr-section h4 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .qr-canvas {
+            margin: 15px 0;
+        }
+
+        .qr-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .qr-info p {
+            margin: 5px 0;
+        }
+
+        .qr-info strong {
+            color: #333;
+        }
+
+        .no-qr {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            margin-top: 15px;
+            border: 1px solid #ffeaa7;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .btn-download {
+            background: #28a745;
+            margin-top: 10px;
+        }
+
+        .btn-download:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Test QR Code Integration</h1>
+            <p>Frontend Testing untuk Pemira API - Admin Panel</p>
+        </div>
+
+        <!-- Login Section -->
+        <div class="login-section">
+            <h2 class="section-title">1️⃣ Login Admin</h2>
+            <div class="form-group">
+                <label for="api-url">API URL</label>
+                <input type="text" id="api-url" value="http://localhost:8080" placeholder="http://localhost:8080">
+            </div>
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" value="admin" placeholder="admin">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" value="password123" placeholder="password123">
+            </div>
+            <button id="btn-login" onclick="login()">🔑 Login</button>
+            <div id="login-status"></div>
+        </div>
+
+        <!-- Candidate Section -->
+        <div class="candidate-section hidden" id="candidate-section">
+            <h2 class="section-title">2️⃣ Kandidat dengan QR Code</h2>
+            <div class="form-group">
+                <label for="election-id">Election ID</label>
+                <input type="number" id="election-id" value="3" placeholder="3">
+            </div>
+            <button id="btn-load" onclick="loadCandidates()">📋 Load Candidates</button>
+            <div id="candidate-status"></div>
+            <div id="candidates-container" class="candidate-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        let accessToken = null;
+        const API_URL = () => document.getElementById('api-url').value;
+
+        // Show status message
+        function showStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        // Login function
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const btnLogin = document.getElementById('btn-login');
+
+            btnLogin.disabled = true;
+            btnLogin.textContent = '⏳ Logging in...';
+            showStatus('login-status', 'Logging in...', 'info');
+
+            try {
+                const response = await fetch(`${API_URL()}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // PENTING: Token ada di access_token, bukan token!
+                accessToken = data.access_token;
+
+                if (!accessToken) {
+                    throw new Error('No access_token in response');
+                }
+
+                showStatus('login-status',
+                    `✅ Login successful! Token: <code>${accessToken.substring(0, 20)}...</code>`,
+                    'success'
+                );
+
+                // Show candidate section
+                document.getElementById('candidate-section').classList.remove('hidden');
+
+            } catch (error) {
+                showStatus('login-status', `❌ Login failed: ${error.message}`, 'error');
+                console.error('Login error:', error);
+            } finally {
+                btnLogin.disabled = false;
+                btnLogin.textContent = '🔑 Login';
+            }
+        }
+
+        // Load candidates
+        async function loadCandidates() {
+            if (!accessToken) {
+                showStatus('candidate-status', '❌ Please login first', 'error');
+                return;
+            }
+
+            const electionId = document.getElementById('election-id').value;
+            const container = document.getElementById('candidates-container');
+            const btnLoad = document.getElementById('btn-load');
+
+            btnLoad.disabled = true;
+            btnLoad.textContent = '⏳ Loading...';
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading candidates...</p></div>';
+
+            try {
+                const response = await fetch(
+                    `${API_URL()}/api/v1/admin/elections/${electionId}/candidates`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Response format: { items: [...], pagination: {...} }
+                const candidates = data.items || [];
+
+                if (candidates.length === 0) {
+                    container.innerHTML = '<div class="no-qr">No candidates found for this election</div>';
+                    showStatus('candidate-status', '⚠️ No candidates found', 'info');
+                    return;
+                }
+
+                // Render candidates
+                container.innerHTML = '';
+                candidates.forEach(candidate => {
+                    const card = createCandidateCard(candidate);
+                    container.appendChild(card);
+                });
+
+                showStatus('candidate-status',
+                    `✅ Loaded ${candidates.length} candidate(s)`,
+                    'success'
+                );
+
+            } catch (error) {
+                container.innerHTML = '';
+                showStatus('candidate-status', `❌ Error: ${error.message}`, 'error');
+                console.error('Load candidates error:', error);
+            } finally {
+                btnLoad.disabled = false;
+                btnLoad.textContent = '📋 Load Candidates';
+            }
+        }
+
+        // Create candidate card
+        function createCandidateCard(candidate) {
+            const card = document.createElement('div');
+            card.className = 'candidate-card';
+
+            card.innerHTML = `
+                <div class="candidate-header">
+                    <span class="candidate-number">#${candidate.number}</span>
+                    <h3 class="candidate-name">${candidate.name}</h3>
+                </div>
+                <p class="candidate-vision">${candidate.vision || 'No vision provided'}</p>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Votes</div>
+                        <div class="stat-value">${candidate.stats.total_votes}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Percentage</div>
+                        <div class="stat-value">${candidate.stats.percentage}%</div>
+                    </div>
+                </div>
+                <div id="qr-container-${candidate.id}"></div>
+            `;
+
+            // Render QR code if available
+            const qrContainer = card.querySelector(`#qr-container-${candidate.id}`);
+
+            if (candidate.qr_code && candidate.qr_code.payload) {
+                renderQRCode(qrContainer, candidate);
+            } else {
+                qrContainer.innerHTML = '<div class="no-qr">⚠️ QR Code not available</div>';
+            }
+
+            return card;
+        }
+
+        // Render QR code
+        function renderQRCode(container, candidate) {
+            const qrSection = document.createElement('div');
+            qrSection.className = 'qr-section';
+
+            const canvasId = `qr-canvas-${candidate.id}`;
+
+            qrSection.innerHTML = `
+                <h4>📱 QR Code for Voting</h4>
+                <canvas id="${canvasId}" class="qr-canvas"></canvas>
+                <button class="btn-download" onclick="downloadQR('${canvasId}', '${candidate.name}')">
+                    💾 Download QR
+                </button>
+                <div class="qr-info">
+                    <p><strong>Token:</strong> <code>${candidate.qr_code.token}</code></p>
+                    <p><strong>Payload:</strong> <code>${candidate.qr_code.payload}</code></p>
+                    <p><strong>Version:</strong> ${candidate.qr_code.version}</p>
+                    <p><strong>Status:</strong> ${candidate.qr_code.is_active ? '✅ Active' : '❌ Inactive'}</p>
+                </div>
+            `;
+
+            container.appendChild(qrSection);
+
+            // Generate QR code
+            setTimeout(() => {
+                const canvas = document.getElementById(canvasId);
+                if (canvas) {
+                    QRCode.toCanvas(canvas, candidate.qr_code.payload, {
+                        width: 256,
+                        errorCorrectionLevel: 'H',
+                        margin: 2
+                    }, (error) => {
+                        if (error) {
+                            console.error('QR generation error:', error);
+                            qrSection.innerHTML = '<div class="no-qr">❌ Failed to generate QR code</div>';
+                        }
+                    });
+                }
+            }, 100);
+        }
+
+        // Download QR code
+        function downloadQR(canvasId, candidateName) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const url = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `qr-${candidateName.replace(/\s+/g, '-').toLowerCase()}.png`;
+            link.href = url;
+            link.click();
+        }
+
+        // Auto-login on load (for testing)
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded. Ready to test!');
+            console.log('Tip: Check browser console for errors');
+        });
+    </script>
+</body>
+</html>

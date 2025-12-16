@@ -66,6 +66,7 @@ type AdminCandidateService interface {
 	AdminDeleteCandidate(ctx context.Context, electionID, candidateID, adminID int64) error
 	AdminPublishCandidate(ctx context.Context, electionID, candidateID int64) (*CandidateDetailDTO, error)
 	AdminUnpublishCandidate(ctx context.Context, electionID, candidateID int64) (*CandidateDetailDTO, error)
+	GenerateQRCode(ctx context.Context, electionID, candidateID int64) (*CandidateDetailDTO, error)
 	UploadProfileMedia(ctx context.Context, candidateID int64, media CandidateMediaCreate) (*CandidateMedia, error)
 	GetProfileMedia(ctx context.Context, candidateID int64) (*CandidateMedia, error)
 	DeleteProfileMedia(ctx context.Context, candidateID, adminID int64) error
@@ -307,7 +308,32 @@ func (h *AdminHandler) Unpublish(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, dto)
 }
 
-// UploadProfileMedia handles POST /admin/candidates/{candidateID}/media/profile
+// GenerateQRCode generates or regenerates QR code for a candidate
+func (h *AdminHandler) GenerateQRCode(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
+		return
+	}
+
+	candidateID, err := parseInt64Param(r, "candidateID")
+	if err != nil || candidateID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
+		return
+	}
+
+	dto, err := h.svc.GenerateQRCode(ctx, electionID, candidateID)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, dto)
+}
+
+// UploadProfileMedia handles profile photo upload for a candidate
 func (h *AdminHandler) UploadProfileMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

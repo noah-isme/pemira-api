@@ -3,6 +3,8 @@ package candidate
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -196,7 +198,7 @@ status,
 created_at,
 updated_at
 FROM candidates
-WHERE election_id = $1 AND id = $2
+WHERE election_id = $1 AND id = $2 AND deleted_at IS NULL
 `
 
 const qGetCandidateByIDNoPhotoMedia = `
@@ -222,7 +224,7 @@ status,
 created_at,
 updated_at
 FROM candidates
-WHERE election_id = $1 AND id = $2
+WHERE election_id = $1 AND id = $2 AND deleted_at IS NULL
 `
 
 const qGetCandidateByCandidateID = `
@@ -248,7 +250,7 @@ status,
 created_at,
 updated_at
 FROM candidates
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 const qGetCandidateByCandidateIDNoPhotoMedia = `
@@ -274,7 +276,7 @@ status,
 created_at,
 updated_at
 FROM candidates
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 // GetByID returns a single candidate by election and candidate ID
@@ -564,8 +566,8 @@ func (r *PgCandidateRepository) Create(ctx context.Context, candidate *Candidate
 	if err != nil {
 		return nil, fmt.Errorf("marshal social_links: %w", err)
 	}
-	
-	slog.Info("Creating candidate", 
+
+	slog.Info("Creating candidate",
 		"missions", string(missionsJSON),
 		"mainPrograms", string(mainProgramsJSON),
 		"media", string(mediaJSON),
@@ -673,7 +675,7 @@ func (r *PgCandidateRepository) Update(ctx context.Context, electionID, candidat
 }
 
 const qSoftDeleteCandidate = `
-UPDATE candidates 
+UPDATE candidates
 SET deleted_at = NOW(), deleted_by_admin_id = $3, updated_at = NOW()
 WHERE election_id = $1 AND id = $2 AND deleted_at IS NULL
 `
@@ -1113,4 +1115,80 @@ func (r *PgCandidateRepository) GetQRCodesByElection(ctx context.Context, electi
 	}
 
 	return qrCodes, nil
+}
+
+// CreateQRCode generates a new QR code for a candidate
+func (r *PgCandidateRepository) CreateQRCode(ctx context.Context, electionID, candidateID int64) (*CandidateQRCode, error) {
+	// Check if candidate exists
+	candidate, err := r.GetByID(ctx, electionID, candidateID)
+	if err != nil {
+		return nil, err
+	}
+	if candidate == nil {
+		return nil, ErrCandidateNotFound
+	}
+
+	// Deactivate existing QR codes for this candidate
+	deactivateQuery := `
+		UPDATE candidate_qr_codes
+		SET is_active = false
+		WHERE candidate_id = $1 AND is_active = true
+	`
+	_, err = r.db.Exec(ctx, deactivateQuery, candidateID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deactivate existing QR codes: %w", err)
+	}
+
+	// Get next version number
+	versionQuery := `
+		SELECT COALESCE(MAX(version), 0) + 1
+		FROM candidate_qr_codes
+		WHERE candidate_id = $1
+	`
+	var version int
+	err = r.db.QueryRow(ctx, versionQuery, candidateID).Scan(&version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next version: %w", err)
+	}
+
+	// Generate unique token
+	token, err := generateCandidateQRToken(electionID, candidateID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate QR token: %w", err)
+	}
+
+	// Insert new QR code
+	insertQuery := `
+		INSERT INTO candidate_qr_codes (election_id, candidate_id, version, qr_token, is_active, created_at)
+		VALUES ($1, $2, $3, $4, true, NOW())
+		RETURNING id, election_id, candidate_id, version, qr_token, is_active
+	`
+
+	var qr CandidateQRCode
+	err = r.db.QueryRow(ctx, insertQuery, electionID, candidateID, version, token).Scan(
+		&qr.ID,
+		&qr.ElectionID,
+		&qr.CandidateID,
+		&qr.Version,
+		&qr.QRToken,
+		&qr.IsActive,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create QR code: %w", err)
+	}
+
+	return &qr, nil
+}
+
+// generateCandidateQRToken generates a unique token for candidate QR code
+func generateCandidateQRToken(electionID, candidateID int64) (string, error) {
+	// Generate random bytes
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+
+	// Create token with format: CAND{candidateID}-{random}
+	token := fmt.Sprintf("CAND%02d-%s", candidateID, base64.URLEncoding.EncodeToString(b)[:12])
+	return token, nil
 }

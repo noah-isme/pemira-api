@@ -7,11 +7,11 @@ import (
 
 // Filter represents query filters for listing candidates
 type Filter struct {
-	Status  *CandidateStatus   // Single status filter (legacy)
+	Status   *CandidateStatus  // Single status filter (legacy)
 	Statuses []CandidateStatus // Multiple status filter (use this if provided)
-	Search  string
-	Limit   int
-	Offset  int
+	Search   string
+	Limit    int
+	Offset   int
 }
 
 // CandidateRepository defines the interface for candidate data access
@@ -32,7 +32,7 @@ type CandidateRepository interface {
 
 	// Delete soft deletes a candidate (sets deleted_at)
 	Delete(ctx context.Context, electionID, candidateID int64, adminID int64) error
-	
+
 	// HardDelete permanently deletes a candidate (use with caution)
 	HardDelete(ctx context.Context, electionID, candidateID int64) error
 
@@ -54,6 +54,7 @@ type CandidateRepository interface {
 	// QR Code operations
 	GetActiveQRCode(ctx context.Context, candidateID int64) (*CandidateQRCode, error)
 	GetQRCodesByElection(ctx context.Context, electionID int64) (map[int64]*CandidateQRCode, error)
+	CreateQRCode(ctx context.Context, electionID, candidateID int64) (*CandidateQRCode, error)
 }
 
 // CandidateQRCode represents a QR code for a candidate

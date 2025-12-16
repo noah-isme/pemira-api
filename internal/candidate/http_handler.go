@@ -188,6 +188,9 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 		// Dari sisi mahasiswa, diperlakukan sama seperti not found
 		response.NotFound(w, "NOT_FOUND", "Kandidat tidak ditemukan untuk pemilu ini.")
 
+	case errors.Is(err, ErrCandidateMediaNotFound):
+		response.NotFound(w, "MEDIA_NOT_FOUND", "Media kandidat tidak ditemukan.")
+
 	default:
 		slog.Error(
 			"candidate handler error",
