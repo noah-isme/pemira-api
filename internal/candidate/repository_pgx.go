@@ -734,7 +734,7 @@ func (r *PgCandidateRepository) UpdateStatus(ctx context.Context, electionID, ca
 const qCheckNumberExists = `
 SELECT EXISTS(
 SELECT 1 FROM candidates
-WHERE election_id = $1 AND number = $2 AND ($3::bigint IS NULL OR id != $3)
+WHERE election_id = $1 AND number = $2 AND ($3::bigint IS NULL OR id != $3) AND deleted_at IS NULL
 )
 `
 
