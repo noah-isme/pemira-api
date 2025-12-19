@@ -60,3 +60,16 @@ make docker-down    # Stop docker services
 - Migrations folder is included in the image
 - API runs as non-root user for security
 - Health checks are configured for postgres and redis
+
+Untuk menghentikan container aplikasi saja (service api), Anda bisa menggunakan perintah:
+
+bash
+docker compose stop api
+Jika Anda ingin menghentikan dan menghapusnya (misalnya untuk rebuild ulang yang bersih), gunakan:
+
+bash
+docker compose rm -s -f api
+Lalu untuk menyalakannya kembali (dengan rebuild):
+
+bash
+docker compose up --build -d api

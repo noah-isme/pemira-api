@@ -43,6 +43,11 @@ type ScanCandidateRequest struct {
 	Payload   string
 }
 
+type SubmitSignatureRequest struct {
+	ElectionID int64
+	Signature  string
+}
+
 // Voter TPS QR request/response
 type VoterQRResult struct {
 	ID         int64      `json:"id"`
@@ -112,7 +117,7 @@ func (s *Service) CastOnlineVote(ctx context.Context, authUser auth.AuthUser, re
 	}
 
 	// Check if user has voter mapping
-	if authUser.Role != constants.RoleStudent || authUser.VoterID == nil {
+	if authUser.VoterID == nil {
 		return ErrVoterMappingMissing
 	}
 
@@ -123,6 +128,7 @@ func (s *Service) CastOnlineVote(ctx context.Context, authUser auth.AuthUser, re
 	if err != nil {
 		return translateNotFound(err, ErrElectionNotFound)
 	}
+	s.ensureElectionStatus(ctx, election)
 
 	// 2. Validate election status
 	if election.Status != "VOTING_OPEN" {
@@ -146,7 +152,7 @@ func (s *Service) CastTPSVote(ctx context.Context, authUser auth.AuthUser, req C
 	}
 
 	// Check if user has voter mapping
-	if authUser.Role != constants.RoleStudent || authUser.VoterID == nil {
+	if authUser.VoterID == nil {
 		return ErrVoterMappingMissing
 	}
 
@@ -157,6 +163,7 @@ func (s *Service) CastTPSVote(ctx context.Context, authUser auth.AuthUser, req C
 	if err != nil {
 		return translateNotFound(err, ErrElectionNotFound)
 	}
+	s.ensureElectionStatus(ctx, election)
 
 	// 2. Validate election status
 	if election.Status != "VOTING_OPEN" {
@@ -404,6 +411,43 @@ func generateVoterQRToken(voterID, electionID int64) (string, error) {
 	return fmt.Sprintf("vqr_%x_%d_%d", bytes[:4], electionID, voterID), nil
 }
 
+func (s *Service) ensureElectionStatus(ctx context.Context, e *election.Election) {
+	if e == nil {
+		return
+	}
+	// Logic copied from election service to support lazy evaluation in voting service
+	// without circular dependencies or massive refactoring.
+	now := time.Now()
+	
+	if e.VotingStartAt != nil && e.VotingEndAt != nil {
+		// Auto-open
+		isVotingWindow := (now.Equal(*e.VotingStartAt) || now.After(*e.VotingStartAt)) && now.Before(*e.VotingEndAt)
+		if isVotingWindow && e.Status != election.ElectionStatusVotingOpen {
+			allowedPrevStates := map[election.ElectionStatus]bool{
+				election.ElectionStatusRegistration:     true,
+				election.ElectionStatusRegistrationOpen: true,
+				election.ElectionStatusCampaign:         true,
+				election.ElectionStatusQuietPeriod:      true,
+				election.ElectionStatusVerification:     true,
+			}
+			if allowedPrevStates[e.Status] {
+				if err := s.electionRepo.UpdateStatus(ctx, e.ID, election.ElectionStatusVotingOpen); err == nil {
+					e.Status = election.ElectionStatusVotingOpen
+				}
+			}
+		}
+
+		// Auto-close
+		isEnded := now.After(*e.VotingEndAt) || now.Equal(*e.VotingEndAt)
+		if isEnded && e.Status == election.ElectionStatusVotingOpen {
+			target := election.ElectionStatusVotingClosed
+			if err := s.electionRepo.UpdateStatus(ctx, e.ID, target); err == nil {
+				e.Status = target
+			}
+		}
+	}
+}
+
 // GetVoterTPSQR returns active QR (generate if rotate=true or not found).
 func (s *Service) GetVoterTPSQR(ctx context.Context, authUser auth.AuthUser, voterID, electionID int64, rotate bool) (*VoterQRResult, error) {
 	if s.db == nil {
@@ -423,6 +467,7 @@ func (s *Service) GetVoterTPSQR(ctx context.Context, authUser auth.AuthUser, vot
 	if err != nil {
 		return nil, translateNotFound(err, ErrElectionNotFound)
 	}
+	s.ensureElectionStatus(ctx, election)
 	if !election.TPSEnabled {
 		return nil, ErrModeNotAllowed
 	}
@@ -486,7 +531,7 @@ func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, re
 		return errors.New("service not initialized")
 	}
 
-	if authUser.Role != constants.RoleStudent || authUser.VoterID == nil {
+	if authUser.VoterID == nil {
 		return ErrVoterMappingMissing
 	}
 
@@ -504,6 +549,7 @@ func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, re
 		if err != nil {
 			return translateNotFound(err, ErrElectionNotFound)
 		}
+		s.ensureElectionStatus(ctx, election)
 
 		if election.Status == "CLOSED" || election.Status == "ARCHIVED" {
 			return ErrElectionNotOpen
@@ -960,4 +1006,47 @@ func (s *Service) ScanCandidateAtTPS(ctx context.Context, authUser auth.AuthUser
 	})
 
 	return result, err
+}
+
+func (s *Service) SubmitDigitalSignature(ctx context.Context, authUser auth.AuthUser, req SubmitSignatureRequest) error {
+	if s.db == nil {
+		return errors.New("service not initialized")
+	}
+
+	if authUser.VoterID == nil {
+		return ErrVoterMappingMissing
+	}
+
+	if strings.TrimSpace(req.Signature) == "" {
+		return errors.New("signature cannot be empty")
+	}
+
+	voterID := *authUser.VoterID
+
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		// Get status
+		vs, err := s.voterRepo.GetStatusForUpdate(ctx, tx, req.ElectionID, voterID)
+		if err != nil {
+			return translateNotFound(err, ErrNotEligible)
+		}
+
+		// Verify has voted
+		if !vs.HasVoted {
+			return ErrVoteRequired
+		}
+
+		// Verify is online vote
+		if vs.VotingMethod == nil || *vs.VotingMethod != "ONLINE" {
+			return ErrMethodNotAllowed
+		}
+
+		// validasi signature existing
+		if vs.DigitalSignature != nil && *vs.DigitalSignature != "" {
+			return ErrSignatureAlreadyExists
+		}
+
+		// Update signature
+		vs.DigitalSignature = &req.Signature
+		return s.voterRepo.UpdateStatus(ctx, tx, vs)
+	})
 }

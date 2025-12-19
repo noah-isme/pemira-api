@@ -27,6 +27,9 @@ func NewServiceLegacy(repo Repository) *Service {
 func (s *Service) GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, error) {
 	// Get election with new priority: REGISTRATION_OPEN → REGISTRATION → CAMPAIGN → VOTING_OPEN
 	e, err := s.repo.GetCurrentElection(ctx)
+	if err == nil {
+		_ = s.checkAndAutoUpdateStatus(ctx, e)
+	}
 	if err != nil {
 		// If no active election, get the most recent non-archived election
 		elections, listErr := s.repo.ListPublicElections(ctx)
@@ -82,6 +85,12 @@ func (s *Service) ListPublicElections(ctx context.Context) ([]CurrentElectionDTO
 	elections, err := s.repo.ListPublicElections(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	// Iterate and check status (only for top active ones to avoid overhead)
+	for i := range elections {
+		// Pointers are needed to update the struct in slice if changed
+		_ = s.checkAndAutoUpdateStatus(ctx, &elections[i])
 	}
 
 	result := make([]CurrentElectionDTO, len(elections))
@@ -240,8 +249,10 @@ func (s *Service) GetMeStatus(
 		return nil, ErrVoterMappingMissing
 	}
 
-	if _, err := s.repo.GetByID(ctx, electionID); err != nil {
+	if e, err := s.repo.GetByID(ctx, electionID); err != nil {
 		return nil, err
+	} else {
+		_ = s.checkAndAutoUpdateStatus(ctx, e)
 	}
 
 	row, err := s.repo.GetVoterStatus(ctx, electionID, *authUser.VoterID)
@@ -304,4 +315,58 @@ func (s *Service) GetMeHistory(ctx context.Context, authUser auth.AuthUser, elec
 	}
 
 	return s.repo.GetHistory(ctx, electionID, *authUser.VoterID, authUser.ID)
+}
+
+// checkAndAutoUpdateStatus checks if the election status needs to be updated based on time
+// and performs the update if necessary. It modifies the in-memory election object as well.
+func (s *Service) checkAndAutoUpdateStatus(ctx context.Context, e *Election) error {
+	if e == nil {
+		return nil
+	}
+
+	now := time.Now()
+	
+	// Case 1: Auto-open voting
+	// If now is between voting_start and voting_end, and status is not VOTING_OPEN
+	if e.VotingStartAt != nil && e.VotingEndAt != nil {
+		isVotingWindow := (now.Equal(*e.VotingStartAt) || now.After(*e.VotingStartAt)) && now.Before(*e.VotingEndAt)
+		
+		if isVotingWindow && e.Status != ElectionStatusVotingOpen {
+			// Only auto-open if it was in REGISTRATION or CAMPAIGN or QUIET_PERIOD or REGISTRATION_OPEN
+			// Avoid re-opening closed/archived manually unless intended (but request said auto-transition)
+			// Safe guard: only transition from "active-ish" states
+			allowedPrevStates := map[ElectionStatus]bool{
+				ElectionStatusRegistration:     true,
+				ElectionStatusRegistrationOpen: true,
+				ElectionStatusCampaign:         true,
+				ElectionStatusQuietPeriod:      true,
+				ElectionStatusVerification:     true,
+				// Maybe DRAFT? No, DRAFT usually needs manual publish
+			}
+			
+			if allowedPrevStates[e.Status] {
+				if err := s.repo.UpdateStatus(ctx, e.ID, ElectionStatusVotingOpen); err == nil {
+					e.Status = ElectionStatusVotingOpen
+					// Log could be added here if logger was available
+				}
+			}
+		}
+
+		// Case 2: Auto-close voting
+		// If now is past voting_end, and status IS VOTING_OPEN
+		isEnded := now.After(*e.VotingEndAt) || now.Equal(*e.VotingEndAt)
+		if isEnded && e.Status == ElectionStatusVotingOpen {
+			// Transition to RECAP (or VOTING_CLOSED if RECAP not used, user said VOTING_CLOSED or RECAP)
+			// Let's use VOTING_CLOSED for safety or RECAP. Use CLOSED as intermediate?
+			// Request said: "Update database: status = 'VOTING_CLOSED' (or RECAP)"
+			// Let's go with VOTING_CLOSED as it seems safer default
+			targetStatus := ElectionStatusVotingClosed
+			
+			if err := s.repo.UpdateStatus(ctx, e.ID, targetStatus); err == nil {
+				e.Status = targetStatus
+			}
+		}
+	}
+	
+	return nil
 }

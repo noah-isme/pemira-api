@@ -51,3 +51,14 @@ temp/
 
 # Go build cache
 .cache/
+
+# Backups and Dumps
+backup/
+*.dump
+*.sql
+!migrations/*.sql
+!fix_db_issues.sql
+!migrations/*.up.sql
+!migrations/*.down.sql
+*.txt
+!*.md

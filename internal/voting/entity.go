@@ -38,6 +38,7 @@ type VoterStatusEntity struct {
 	PreferredMethod *string    `json:"preferred_method,omitempty"`
 	OnlineAllowed   bool       `json:"online_allowed"`
 	TPSAllowed      bool       `json:"tps_allowed"`
+	DigitalSignature *string    `json:"digital_signature"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

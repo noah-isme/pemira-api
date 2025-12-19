@@ -25,6 +25,7 @@ type VoterStatusDTO struct {
 	VotingMethod    *string    `json:"voting_method,omitempty"`
 	LastVoteChannel *string    `json:"last_vote_channel,omitempty"`
 	LastTPSID       *int64     `json:"last_tps_id,omitempty"`
+	DigitalSignature *string    `json:"digital_signature,omitempty"`
 }
 
 type Pagination struct {

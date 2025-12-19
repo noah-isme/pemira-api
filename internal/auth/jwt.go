@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -114,6 +115,8 @@ func (j *JWTManager) ValidateAccessToken(tokenString string) (*JWTClaims, error)
 	if voterID, ok := claims["voter_id"].(float64); ok {
 		vid := int64(voterID)
 		jwtClaims.VoterID = &vid
+	} else {
+		fmt.Printf("DEBUG: VoterID claim missing or not float64: %v (type %T)\n", claims["voter_id"], claims["voter_id"])
 	}
 
 	if tpsID, ok := claims["tps_id"].(float64); ok {

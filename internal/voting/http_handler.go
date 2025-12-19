@@ -3,6 +3,7 @@ package voting
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -59,6 +60,7 @@ type voterQRRequest struct {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/voting/online/cast", h.CastOnlineVote)
+	r.Post("/voting/online/signature", h.SubmitDigitalSignature)
 	r.Post("/voting/tps/cast", h.CastTPSVote)
 	r.Get("/voting/tps/status", h.GetTPSVotingStatus)
 	r.Get("/voting/receipt", h.GetVotingReceipt)
@@ -103,6 +105,7 @@ func (h *Handler) CastOnlineVote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call service
+	fmt.Printf("[DEBUG] CastOnlineVote AuthUser: ID=%d Role=%s VoterID=%v\n", authUser.ID, authUser.Role, authUser.VoterID)
 	if err := h.service.CastOnlineVote(ctx, authUser, req); err != nil {
 		h.handleError(w, err)
 		return
@@ -110,6 +113,36 @@ func (h *Handler) CastOnlineVote(w http.ResponseWriter, r *http.Request) {
 
 	response.JSON(w, http.StatusOK, map[string]string{
 		"message": "Suara online berhasil direkam.",
+	})
+}
+
+// POST /voting/online/signature
+func (h *Handler) SubmitDigitalSignature(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	var reqBody SubmitSignatureRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	if reqBody.ElectionID <= 0 || strings.TrimSpace(reqBody.Signature) == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "election_id dan signature wajib diisi.")
+		return
+	}
+
+	if err := h.service.SubmitDigitalSignature(ctx, authUser, reqBody); err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Tanda tangan digital berhasil disimpan.",
 	})
 }
 
@@ -474,7 +507,14 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrDuplicateVoteAttempt):
 		response.Conflict(w, "DUPLICATE_VOTE_ATTEMPT", "Permintaan ini tidak dapat diproses karena suara Anda sudah tercatat.")
 
+	case errors.Is(err, ErrVoteRequired):
+		response.BadRequest(w, "VOTE_REQUIRED", "Anda harus melakukan pemilihan terlebih dahulu.")
+
+	case errors.Is(err, ErrSignatureAlreadyExists):
+		response.Conflict(w, "SIGNATURE_EXISTS", "Tanda tangan digital sudah ada.")
+
 	default:
+		fmt.Printf("[ErrorHandler] Internal Error: %v\n", err)
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }

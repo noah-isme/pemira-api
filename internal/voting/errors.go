@@ -21,6 +21,8 @@ var (
 	ErrInvalidBallotQR       = errors.New("invalid ballot qr")
 	ErrElectionMismatch      = errors.New("election mismatch")
 	ErrModeNotAllowed        = errors.New("voting mode not available")
+	ErrVoteRequired          = errors.New("must vote before signing")
+	ErrSignatureAlreadyExists = errors.New("digital signature already submitted")
 )
 
 func translateNotFound(err error, customErr error) error {

@@ -28,9 +28,28 @@ var (
 	ErrVoterStatusNotFound = fmt.Errorf("voter status not found")
 )
 
-// GetCurrentElection returns the election with VOTING_OPEN status
-// Priority changed: REGISTRATION → CAMPAIGN → VOTING_OPEN
+// GetCurrentElection returns the currently active election.
+// Logic:
+// 1. If 'active_election_id' is set in settings, return that election (if exists).
+// 2. Fallback: Return election with highest priority status (REGISTRATION -> CAMPAIGN -> VOTING_OPEN).
 func (r *PgRepository) GetCurrentElection(ctx context.Context) (*Election, error) {
+	// 1. Try to get active election ID from settings
+	var activeIDStr string
+	err := r.db.QueryRow(ctx, "SELECT value FROM app_settings WHERE key = 'active_election_id'").Scan(&activeIDStr)
+	if err == nil && activeIDStr != "" {
+		// Valid setting found
+		var id int64
+		// Parse string to int64
+		if _, err := fmt.Sscanf(activeIDStr, "%d", &id); err == nil && id > 0 {
+			// Fetch specific election
+			e, err := r.GetByID(ctx, id)
+			if err == nil {
+				return e, nil
+			}
+			// If error fetching by ID (e.g. not found), fall through to default logic
+		}
+	}
+
 	const q = `
 SELECT
     id,
@@ -56,7 +75,7 @@ ORDER BY
 LIMIT 1
 `
 	var e Election
-	err := r.db.QueryRow(ctx, q).Scan(
+	err = r.db.QueryRow(ctx, q).Scan(
 		&e.ID,
 		&e.Year,
 		&e.Name,
@@ -490,3 +509,11 @@ func (r *PgRepository) GetHistory(ctx context.Context, electionID, voterID, user
 
 	return h, nil
 }
+
+// UpdateStatus updates the election status by ID
+func (r *PgRepository) UpdateStatus(ctx context.Context, id int64, status ElectionStatus) error {
+	const q = `UPDATE elections SET status = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.db.Exec(ctx, q, status, id)
+	return err
+}
+

@@ -128,18 +128,9 @@ func (s *AdminService) UpdatePhases(ctx context.Context, id int64, req UpdateEle
 		return nil, err
 	}
 
-	current, err := s.repo.GetElectionByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
 
-	if current.Status == ElectionStatusVotingOpen {
-		for _, ph := range req.Phases {
-			if ph.Key == PhaseKeyVoting {
-				return nil, ErrVotingPhaseLocked
-			}
-		}
-	}
+
+
 
 	updated, err := s.repo.UpdatePhases(ctx, id, req.Phases)
 	if err != nil {

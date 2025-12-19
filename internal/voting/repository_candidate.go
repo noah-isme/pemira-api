@@ -17,24 +17,24 @@ func NewCandidateRepository() CandidateRepository {
 
 func (r *candidateRepository) GetByIDWithTx(ctx context.Context, tx pgx.Tx, candidateID int64) (*candidate.Candidate, error) {
 	query := `
-		SELECT id, election_id, order_number, name, vision_mission, photo_url, is_active, created_at, updated_at
+		SELECT id, election_id, number, name, vision, photo_url, status, created_at, updated_at
 		FROM candidates
 		WHERE id = $1
 	`
 	
 	var c candidate.Candidate
 	
-	var visionMission string
-	var isActive bool
+	var vision *string
+	var status string
 	
 	err := tx.QueryRow(ctx, query, candidateID).Scan(
 		&c.ID,
 		&c.ElectionID,
 		&c.Number,
 		&c.Name,
-		&visionMission,  // Skip this field
+		&vision,
 		&c.PhotoURL,
-		&isActive,       // Skip this field
+		&status,
 		&c.CreatedAt,
 		&c.UpdatedAt,
 	)

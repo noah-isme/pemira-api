@@ -18,7 +18,7 @@ func NewVoteRepository() VoteRepository {
 
 func (r *voteRepository) InsertToken(ctx context.Context, tx pgx.Tx, token *VoteToken) error {
 	query := `
-		INSERT INTO vote_tokens (election_id, voter_id, token, issued_at, method, tps_id)
+		INSERT INTO vote_tokens (election_id, voter_id, token_hash, issued_at, method, tps_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
@@ -68,7 +68,7 @@ func (r *voteRepository) MarkTokenUsed(ctx context.Context, tx pgx.Tx, electionI
 	query := `
 		UPDATE vote_tokens
 		SET used_at = $1
-		WHERE election_id = $2 AND token = $3
+		WHERE election_id = $2 AND token_hash = $3
 	`
 
 	_, err := tx.Exec(ctx, query, usedAt, electionID, tokenHash)

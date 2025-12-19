@@ -18,7 +18,7 @@ func (r *voterRepository) GetStatusForUpdate(ctx context.Context, tx pgx.Tx, ele
 	query := `
 		SELECT id, election_id, voter_id, is_eligible, has_voted, 
 		       voting_method, tps_id, voted_at, vote_token_hash,
-		       preferred_method, online_allowed, tps_allowed
+		       preferred_method, online_allowed, tps_allowed, digital_signature
 		FROM voter_status
 		WHERE election_id = $1 AND voter_id = $2
 		FOR UPDATE
@@ -39,6 +39,7 @@ func (r *voterRepository) GetStatusForUpdate(ctx context.Context, tx pgx.Tx, ele
 		&vs.PreferredMethod,
 		&vs.OnlineAllowed,
 		&vs.TPSAllowed,
+		&vs.DigitalSignature,
 	)
 
 	if err != nil {
@@ -62,8 +63,9 @@ func (r *voterRepository) UpdateStatus(ctx context.Context, tx pgx.Tx, status *V
 		    preferred_method = COALESCE($6, preferred_method),
 		    online_allowed = $7,
 		    tps_allowed = $8,
+		    digital_signature = $9,
 		    updated_at = NOW()
-		WHERE id = $9
+		WHERE id = $10
 	`
 
 	_, err := tx.Exec(ctx, query,
@@ -75,6 +77,7 @@ func (r *voterRepository) UpdateStatus(ctx context.Context, tx pgx.Tx, status *V
 		status.PreferredMethod,
 		status.OnlineAllowed,
 		status.TPSAllowed,
+		status.DigitalSignature,
 		status.ID,
 	)
 
@@ -95,7 +98,7 @@ func (r *voterRepository) EnsureStatus(ctx context.Context, tx pgx.Tx, electionI
 		              online_allowed = EXCLUDED.online_allowed,
 		              tps_allowed = EXCLUDED.tps_allowed,
 		              updated_at = NOW()
-		RETURNING id, election_id, voter_id, is_eligible, has_voted, voting_method, tps_id, voted_at, vote_token_hash, preferred_method, online_allowed, tps_allowed, created_at, updated_at
+		RETURNING id, election_id, voter_id, is_eligible, has_voted, voting_method, tps_id, voted_at, vote_token_hash, preferred_method, online_allowed, tps_allowed, digital_signature, created_at, updated_at
 	`
 
 	var vs VoterStatusEntity
@@ -112,6 +115,7 @@ func (r *voterRepository) EnsureStatus(ctx context.Context, tx pgx.Tx, electionI
 		&vs.PreferredMethod,
 		&vs.OnlineAllowed,
 		&vs.TPSAllowed,
+		&vs.DigitalSignature,
 		&vs.CreatedAt,
 		&vs.UpdatedAt,
 	)

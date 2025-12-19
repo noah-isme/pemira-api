@@ -238,10 +238,11 @@ func main() {
 			r.Post("/tps/checkin/scan", tpsHandler.ScanQR)
 			r.Get("/tps/checkin/status", tpsHandler.StudentCheckinStatus)
 
-			// Voting routes (student only)
+			// Voting routes (student, lecturer, staff)
 			r.Group(func(r chi.Router) {
-				r.Use(httpMiddleware.AuthStudentOnly(jwtManager))
+				r.Use(httpMiddleware.JWTAuth(jwtManager))
 				r.Post("/voting/online/cast", votingHandler.CastOnlineVote)
+				r.Post("/voting/online/signature", votingHandler.SubmitDigitalSignature)
 				r.Post("/voting/tps/cast", votingHandler.CastTPSVote)
 				r.Post("/voting/tps/ballots/parse-qr", votingHandler.ParseBallotQR)
 				r.Post("/voting/tps/ballots/cast-from-qr", votingHandler.CastBallotFromQR)
