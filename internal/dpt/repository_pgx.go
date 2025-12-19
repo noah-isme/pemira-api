@@ -209,7 +209,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			vs.voting_method,
 			v.voting_method,
 			vs.tps_id,
-			vs.digital_signature
+			vs.digital_signature_url
 		FROM election_voters ev
 		INNER JOIN voters v ON v.id = ev.voter_id
 		LEFT JOIN voter_status vs ON vs.voter_id = ev.voter_id AND vs.election_id = ev.election_id
@@ -251,7 +251,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			&statusMethod,
 			&voterMethod,
 			&item.Status.LastTPSID,
-			&item.Status.DigitalSignature,
+			&item.Status.DigitalSignatureURL,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan voter: %w", err)
@@ -293,7 +293,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			vs.voting_method,
 			v.voting_method,
 			vs.tps_id,
-			vs.digital_signature
+			vs.digital_signature_url
 		FROM election_voters ev
 		INNER JOIN voters v ON v.id = ev.voter_id
 		LEFT JOIN voter_status vs ON vs.voter_id = ev.voter_id AND vs.election_id = ev.election_id
@@ -331,7 +331,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			&statusMethod,
 			&voterMethod,
 			&item.Status.LastTPSID,
-			&item.Status.DigitalSignature,
+			&item.Status.DigitalSignatureURL,
 		)
 		if err != nil {
 			return fmt.Errorf("scan voter: %w", err)
@@ -468,7 +468,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, elec
 			coalesce(ev.voting_method, vs.voting_method, v.voting_method) as status_voting_method,
 			v.voting_method as voter_voting_method,
 			vs.tps_id,
-			vs.digital_signature
+			vs.digital_signature_url
 		FROM election_voters ev
 		INNER JOIN voters v ON v.id = ev.voter_id
 		LEFT JOIN voter_status vs ON vs.voter_id = v.id AND vs.election_id = ev.election_id
@@ -499,7 +499,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, elec
 		&statusMethod,
 		&voterMethod,
 		&item.Status.LastTPSID,
-		&item.Status.DigitalSignature,
+		&item.Status.DigitalSignatureURL,
 	)
 
 	if err != nil {

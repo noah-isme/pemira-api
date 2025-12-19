@@ -81,7 +81,7 @@ Coba kirim tanda tangan lagi dengan akun yang sama. Harusnya **GAGAL**.
   ```json
   {
     "identity": "admin",
-    "password": "password",
+    "password": "password123",
     "role": "ADMIN"
   }
   ```

@@ -19,7 +19,7 @@ Setelah pemilih sukses melakukan voting online (`POST /voting/online/cast`), fro
   "signature": "data:image/png;base64,iVBORw0KGgoAAAANSUhORgAA..."
 }
 ```
-> **Note:** Format `signature` adalah string, disarankan menggunakan Base64 dari image/canvas.
+> **Note:** Format `signature` adalah string Base64 dari canvas/image. Backend akan mengupload ke Supabase Storage.
 
 ### Response `200 OK`
 ```json
@@ -36,45 +36,36 @@ Setelah pemilih sukses melakukan voting online (`POST /voting/online/cast`), fro
 
 ## 2. Admin Side: Menampilkan Tanda Tangan di DPT
 
-Pada halaman list DPT Admin, data tanda tangan akan tersedia di dalam properti `status`.
+Pada halaman list DPT Admin, data tanda tangan tersedia sebagai **URL** (bukan base64).
 
 ### Endpoint
-`GET /dpt/elections/{election_id}/voters`
+`GET /admin/elections/{election_id}/voters`
 
-### Response Payload (Contoh Item List)
+### Response Payload (Contoh Item)
 ```json
 {
-  "data": [
-    {
-      "voter_id": 1001,
-      "nim": "12345678",
-      "name": "Budi Santoso",
-      "faculty_name": "Teknik",
-      "study_program_name": "Informatika",
-      "cohort_year": 2023,
-      "email": "budi@student.univ.ac.id",
-      "has_account": true,
-      "voter_type": "STUDENT",
-      "status": {
-        "is_eligible": true,
-        "has_voted": true,
-        "last_vote_at": "2025-12-19T06:30:00Z",
-        "voting_method": "ONLINE",
-        "last_vote_channel": "ONLINE",
-        "digital_signature": "data:image/png;base64,iVBORw0KGgoAAAANSUhORgAA..." 
+  "data": {
+    "items": [
+      {
+        "voter_id": 1001,
+        "nim": "12345678",
+        "name": "Budi Santoso",
+        "status": {
+          "is_eligible": true,
+          "has_voted": true,
+          "voting_method": "ONLINE",
+          "digital_signature_url": "https://xxx.supabase.co/storage/v1/object/public/pemira/signatures/1/1001.png"
+        }
       }
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total_items": 50,
-    "total_pages": 5
+    ]
   }
 }
 ```
 
+> **PENTING:** Field berubah dari `digital_signature` (base64) menjadi `digital_signature_url` (URL Supabase Storage).
+
 ### Implementasi Admin
-- Cek field `status.digital_signature`.
-- Jika ada (tidak `null` atau `""`), tampilkan tombol "Lihat Tanda Tangan".
-- Saat diklik, tampilkan gambar dari string Base64 tersebut.
+- Cek field `status.digital_signature_url`
+- Jika ada (tidak `null`), tampilkan tombol "Lihat Tanda Tangan"
+- Render langsung sebagai `<img src={digital_signature_url} />` (bukan base64 decode)
+

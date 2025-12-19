@@ -3,6 +3,7 @@ package voting
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1017,11 +1018,52 @@ func (s *Service) SubmitDigitalSignature(ctx context.Context, authUser auth.Auth
 		return ErrVoterMappingMissing
 	}
 
-	if strings.TrimSpace(req.Signature) == "" {
+	signatureData := strings.TrimSpace(req.Signature)
+	if signatureData == "" {
 		return errors.New("signature cannot be empty")
 	}
 
 	voterID := *authUser.VoterID
+
+	// Decode base64 signature (may have data URI prefix)
+	base64Data := signatureData
+	contentType := "image/png"
+	if strings.HasPrefix(signatureData, "data:") {
+		parts := strings.SplitN(signatureData, ",", 2)
+		if len(parts) != 2 {
+			return errors.New("invalid signature format")
+		}
+		// Extract content type from data URI
+		if strings.Contains(parts[0], "image/jpeg") {
+			contentType = "image/jpeg"
+		} else if strings.Contains(parts[0], "image/png") {
+			contentType = "image/png"
+		}
+		base64Data = parts[1]
+	}
+
+	imageBytes, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return errors.New("invalid signature encoding")
+	}
+
+	// Upload to Supabase Storage
+	storage, err := newSignatureStorage()
+	if err != nil {
+		return fmt.Errorf("failed to init storage: %w", err)
+	}
+
+	ext := ".png"
+	if contentType == "image/jpeg" {
+		ext = ".jpg"
+	}
+	path := fmt.Sprintf("signatures/%d/%d%s", req.ElectionID, voterID, ext)
+	bucket := getSignatureBucket()
+
+	publicURL, err := storage.Upload(ctx, bucket, path, imageBytes, contentType)
+	if err != nil {
+		return fmt.Errorf("failed to upload signature: %w", err)
+	}
 
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		// Get status
@@ -1041,12 +1083,13 @@ func (s *Service) SubmitDigitalSignature(ctx context.Context, authUser auth.Auth
 		}
 
 		// validasi signature existing
-		if vs.DigitalSignature != nil && *vs.DigitalSignature != "" {
+		if vs.DigitalSignatureURL != nil && *vs.DigitalSignatureURL != "" {
 			return ErrSignatureAlreadyExists
 		}
 
-		// Update signature
-		vs.DigitalSignature = &req.Signature
+		// Update signature URL
+		vs.DigitalSignatureURL = &publicURL
 		return s.voterRepo.UpdateStatus(ctx, tx, vs)
 	})
 }
+
