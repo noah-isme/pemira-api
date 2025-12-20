@@ -67,3 +67,12 @@ MaxGapMinutes    float64 `json:"max_gap_minutes"`
 MedianGapMinutes float64 `json:"median_gap_minutes"`
 P95GapMinutes    float64 `json:"p95_gap_minutes"`
 }
+
+// FacultyParticipation represents participation statistics per faculty
+type FacultyParticipation struct {
+FacultyCode    string  `json:"faculty_code"`
+FacultyName    string  `json:"faculty_name"`
+TotalEligible  int64   `json:"total_eligible"`
+TotalVoted     int64   `json:"total_voted"`
+TurnoutPercent float64 `json:"turnout_percent"`
+}

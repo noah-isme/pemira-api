@@ -27,6 +27,7 @@ GetFacultyCandidateHeatmap(ctx context.Context, electionID int64) ([]FacultyCand
 GetCohortCandidateVotes(ctx context.Context, electionID int64) ([]CohortCandidateVotes, error)
 GetPeakHours(ctx context.Context, electionID int64) ([]PeakHour, error)
 GetVotingVelocity(ctx context.Context, electionID int64) (*VotingVelocity, error)
+GetFacultyParticipation(ctx context.Context, electionID int64) ([]FacultyParticipation, error)
 }
 
 // Handler handles HTTP requests for analytics endpoints
@@ -69,6 +70,8 @@ r.Get("/peak-hours", h.GetPeakHours)
 
 // GET /admin/elections/{electionID}/analytics/voting-velocity
 r.Get("/voting-velocity", h.GetVotingVelocity)
+	// GET /admin/elections/{electionID}/analytics/by-faculty
+	r.Get("/by-faculty", h.GetFacultyParticipation)
 }
 
 // parseElectionID extracts and validates electionID from URL parameters
@@ -242,4 +245,23 @@ default:
 // Log internal error here if needed
 h.res.InternalServerError(w, "Terjadi kesalahan pada sistem.")
 }
+}
+
+// GetFacultyParticipation handles GET /by-faculty
+func (h *Handler) GetFacultyParticipation(w http.ResponseWriter, r *http.Request) {
+ctx := r.Context()
+
+electionID, err := parseElectionID(r)
+if err != nil || electionID <= 0 {
+h.res.BadRequest(w, "electionID tidak valid.", nil)
+return
+}
+
+data, err := h.svc.GetFacultyParticipation(ctx, electionID)
+if err != nil {
+h.handleError(w, err)
+return
+}
+
+h.res.Success(w, http.StatusOK, data)
 }

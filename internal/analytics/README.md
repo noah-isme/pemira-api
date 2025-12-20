@@ -19,6 +19,7 @@ Data structures for analytics results:
 - `CohortCandidateVotes` - Demographic breakdown by cohort
 - `PeakHour` - Busiest voting hours
 - `VotingVelocity` - Statistical speed metrics
+- `FacultyParticipation` - Participation statistics per faculty
 
 ### Repository (`repository.go`)
 Data access layer using pgxpool with embedded SQL queries:
@@ -94,6 +95,11 @@ GET /admin/elections/{electionID}/analytics/peak-hours
 GET /admin/elections/{electionID}/analytics/voting-velocity
 ```
 
+**Faculty participation:**
+```
+GET /admin/elections/{electionID}/analytics/by-faculty
+```
+
 ### Example Response
 
 **GET /admin/elections/1/analytics/timeline/votes**
@@ -130,6 +136,26 @@ GET /admin/elections/{electionID}/analytics/voting-velocity
     "p95_gap_minutes": 8.5
   }
 }
+```
+
+**GET /admin/elections/1/analytics/by-faculty**
+```json
+[
+  {
+    "faculty_code": "FT",
+    "faculty_name": "Fakultas Teknik",
+    "total_eligible": 500,
+    "total_voted": 425,
+    "turnout_percent": 85.00
+  },
+  {
+    "faculty_code": "FE",
+    "faculty_name": "Fakultas Ekonomi",
+    "total_eligible": 400,
+    "total_voted": 320,
+    "turnout_percent": 80.00
+  }
+]
 ```
 
 ## Testing
@@ -183,6 +209,7 @@ All SQL queries are embedded from `/queries/analytics_*.sql`:
 - `analytics_07_votes_by_cohort_candidate.sql`
 - `analytics_09_peak_hours_analysis.sql`
 - `analytics_10_voting_velocity.sql`
+- `analytics_turnout_per_faculty.sql`
 
 See `/queries/README.md` for query documentation.
 

@@ -2,32 +2,62 @@ package analytics
 
 import (
 "context"
-_ "embed"
+"os"
+"path/filepath"
 
 "github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed ../../queries/analytics_02_timeline_votes_by_channel.sql
-var qGetHourlyVotesByChannel string
+var (
+qGetHourlyVotesByChannel    string
+qGetHourlyVotesByCandidate  string
+qFacultyCandidateHeatmap    string
+qTurnoutTimeline            string
+qCohortCandidateVotes       string
+qPeakHoursAnalysis          string
+qVotingVelocity             string
+qFacultyParticipation       string
+)
 
-//go:embed ../../queries/analytics_03_timeline_votes_per_candidate.sql
-var qGetHourlyVotesByCandidate string
+func init() {
+// Get queries directory - try multiple paths
+queriesDirs := []string{
+"queries",                    // When running from project root
+"./queries",                  // Relative to binary
+"../queries",                 // When in cmd/api
+"../../queries",              // When in internal/analytics
+"/app/queries",               // Docker container path
+}
 
-//go:embed ../../queries/analytics_05_heatmap_faculty_candidate_percent.sql
-var qFacultyCandidateHeatmap string
+var queriesDir string
+for _, dir := range queriesDirs {
+if _, err := os.Stat(filepath.Join(dir, "analytics_11_turnout_per_faculty.sql")); err == nil {
+queriesDir = dir
+break
+}
+}
 
-//go:embed ../../queries/analytics_06_turnout_cumulative_timeline.sql
-var qTurnoutTimeline string
+if queriesDir == "" {
+panic("failed to find queries directory")
+}
 
-//go:embed ../../queries/analytics_07_votes_by_cohort_candidate.sql
-var qCohortCandidateVotes string
+qGetHourlyVotesByChannel = mustReadFile(filepath.Join(queriesDir, "analytics_02_timeline_votes_by_channel.sql"))
+qGetHourlyVotesByCandidate = mustReadFile(filepath.Join(queriesDir, "analytics_03_timeline_votes_per_candidate.sql"))
+qFacultyCandidateHeatmap = mustReadFile(filepath.Join(queriesDir, "analytics_05_heatmap_faculty_candidate_percent.sql"))
+qTurnoutTimeline = mustReadFile(filepath.Join(queriesDir, "analytics_06_turnout_cumulative_timeline.sql"))
+qCohortCandidateVotes = mustReadFile(filepath.Join(queriesDir, "analytics_07_votes_by_cohort_candidate.sql"))
+qPeakHoursAnalysis = mustReadFile(filepath.Join(queriesDir, "analytics_09_peak_hours_analysis.sql"))
+qVotingVelocity = mustReadFile(filepath.Join(queriesDir, "analytics_10_voting_velocity.sql"))
+qFacultyParticipation = mustReadFile(filepath.Join(queriesDir, "analytics_11_turnout_per_faculty.sql"))
+}
 
-//go:embed ../../queries/analytics_09_peak_hours_analysis.sql
-var qPeakHoursAnalysis string
-
-//go:embed ../../queries/analytics_10_voting_velocity.sql
-var qVotingVelocity string
-
+func mustReadFile(path string) string {
+data, err := os.ReadFile(path)
+if err != nil {
+panic("failed to read query file " + path + ": " + err.Error())
+}
+return string(data)
+}
 // AnalyticsRepository defines the interface for analytics data access
 type AnalyticsRepository interface {
 GetHourlyVotesByChannel(ctx context.Context, electionID int64) ([]HourlyVotes, error)
@@ -37,6 +67,7 @@ GetTurnoutTimeline(ctx context.Context, electionID int64) ([]TurnoutPoint, error
 GetCohortCandidateVotes(ctx context.Context, electionID int64) ([]CohortCandidateVotes, error)
 GetPeakHours(ctx context.Context, electionID int64) ([]PeakHour, error)
 GetVotingVelocity(ctx context.Context, electionID int64) (*VotingVelocity, error)
+GetFacultyParticipation(ctx context.Context, electionID int64) ([]FacultyParticipation, error)
 }
 
 // AnalyticsRepo implements AnalyticsRepository using pgxpool
@@ -256,4 +287,35 @@ if err != nil {
 return nil, err
 }
 return &result, nil
+}
+
+// GetFacultyParticipation returns participation statistics per faculty
+func (r *AnalyticsRepo) GetFacultyParticipation(
+ctx context.Context,
+electionID int64,
+) ([]FacultyParticipation, error) {
+rows, err := r.db.Query(ctx, qFacultyParticipation, electionID)
+if err != nil {
+return nil, err
+}
+defer rows.Close()
+
+var result []FacultyParticipation
+for rows.Next() {
+var row FacultyParticipation
+if err := rows.Scan(
+&row.FacultyCode,
+&row.FacultyName,
+&row.TotalEligible,
+&row.TotalVoted,
+&row.TurnoutPercent,
+); err != nil {
+return nil, err
+}
+result = append(result, row)
+}
+if rows.Err() != nil {
+return nil, rows.Err()
+}
+return result, nil
 }

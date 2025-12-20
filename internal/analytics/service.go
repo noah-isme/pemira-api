@@ -144,3 +144,8 @@ return s.repo.GetPeakHours(ctx, electionID)
 func (s *Service) GetVotingVelocity(ctx context.Context, electionID int64) (*VotingVelocity, error) {
 return s.repo.GetVotingVelocity(ctx, electionID)
 }
+
+// GetFacultyParticipation wraps repository method
+func (s *Service) GetFacultyParticipation(ctx context.Context, electionID int64) ([]FacultyParticipation, error) {
+return s.repo.GetFacultyParticipation(ctx, electionID)
+}

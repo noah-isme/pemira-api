@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"pemira-api/internal/adminuser"
+	"pemira-api/internal/analytics"
 	"pemira-api/internal/auth"
 	"pemira-api/internal/candidate"
 	"pemira-api/internal/config"
@@ -123,6 +124,10 @@ func main() {
 	adminUserService := adminuser.NewService(adminUserRepo)
 	masterService := master.NewService(masterRepo)
 
+	// Analytics
+	analyticsRepo := analytics.NewAnalyticsRepo(pool)
+	analyticsService := analytics.NewService(analyticsRepo)
+
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	electionHandler := election.NewHandler(electionService)
@@ -140,6 +145,9 @@ func main() {
 	electionVoterHandler := electionvoter.NewHandler(electionVoterService)
 	adminUserHandler := adminuser.NewHandler(adminUserService)
 	masterHandler := master.NewHandler(masterService)
+	
+	// Analytics with response writer
+	analyticsHandler := analytics.NewHandler(analyticsService, analytics.NewStandardResponseWriter())
 
 	logger.Info("services initialized successfully")
 
@@ -329,6 +337,11 @@ func main() {
 						r.Get("/{voterID}", dptHandler.Get)
 						r.Put("/{voterID}", dptHandler.Update)
 						r.Delete("/{voterID}", dptHandler.Delete)
+					})
+
+					// Analytics endpoints
+					r.Route("/{electionID}/analytics", func(r chi.Router) {
+						analyticsHandler.Mount(r)
 					})
 
 					// TPS monitoring per election
