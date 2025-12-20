@@ -26,12 +26,13 @@ HTTP_PORT=8080
 
 ### 3. DATABASE_URL
 ```
-DATABASE_URL=postgresql://kvokrhrtikcshvtbrwiu:egqsndudnxifwwiaoiucitxgnbvjyo@9qasp5v56q8ckkf5dc.apn.leapcellpool.com:6438/wgompdtswdesvswbydon?sslmode=require
+DATABASE_URL=postgresql://<USERNAME>:<PASSWORD>@<HOST>:<PORT>/<DATABASE>?sslmode=require
 ```
 - **Description**: PostgreSQL connection string
 - **Required**: Yes
-- **Status**: ✅ Already migrated and ready
+- **Status**: ✅ Configure in your deployment platform
 - **Note**: Include `?sslmode=require` for production
+- **⚠️ Security**: NEVER commit actual credentials to git!
 
 ### 4. JWT_SECRET
 ```
@@ -131,14 +132,17 @@ REDIS_URL=redis://default:password@host:6379
 
 ## 📝 Copy-Paste Template for Leapcell
 
+> [!CAUTION]
+> **NEVER commit actual credentials to git!** Get credentials from your deployment dashboard.
+
 ```bash
 APP_ENV=production
 HTTP_PORT=8080
-DATABASE_URL=postgresql://kvokrhrtikcshvtbrwiu:egqsndudnxifwwiaoiucitxgnbvjyo@9qasp5v56q8ckkf5dc.apn.leapcellpool.com:6438/wgompdtswdesvswbydon?sslmode=require
-JWT_SECRET=<PASTE-GENERATED-SECRET-HERE>
+DATABASE_URL=<GET-FROM-YOUR-DATABASE-PROVIDER>
+JWT_SECRET=<GENERATE-WITH-openssl-rand-base64-32>
 JWT_EXPIRATION=24h
-SUPABASE_URL=https://xqzfrodnznhjstfstvyz.supabase.co
-SUPABASE_SECRET_KEY=<PASTE-SERVICE-ROLE-KEY-HERE>
+SUPABASE_URL=<YOUR-SUPABASE-PROJECT-URL>
+SUPABASE_SECRET_KEY=<YOUR-SUPABASE-SERVICE-ROLE-KEY>
 SUPABASE_MEDIA_BUCKET=pemira
 SUPABASE_BRANDING_BUCKET=pemira
 CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
