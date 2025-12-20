@@ -1,63 +1,35 @@
 package analytics
 
 import (
-"context"
-"os"
-"path/filepath"
+	"context"
 
-"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
-qGetHourlyVotesByChannel    string
-qGetHourlyVotesByCandidate  string
-qFacultyCandidateHeatmap    string
-qTurnoutTimeline            string
-qCohortCandidateVotes       string
-qPeakHoursAnalysis          string
-qVotingVelocity             string
-qFacultyParticipation       string
+	qGetHourlyVotesByChannel    string
+	qGetHourlyVotesByCandidate  string
+	qFacultyCandidateHeatmap    string
+	qTurnoutTimeline            string
+	qCohortCandidateVotes       string
+	qPeakHoursAnalysis          string
+	qVotingVelocity             string
+	qFacultyParticipation       string
 )
 
 func init() {
-// Get queries directory - try multiple paths
-queriesDirs := []string{
-"queries",                    // When running from project root
-"./queries",                  // Relative to binary
-"../queries",                 // When in cmd/api
-"../../queries",              // When in internal/analytics
-"/app/queries",               // Docker container path
+	// Load queries from embedded filesystem (works in Docker)
+	qGetHourlyVotesByChannel = mustReadQuery("analytics_02_timeline_votes_by_channel.sql")
+	qGetHourlyVotesByCandidate = mustReadQuery("analytics_03_timeline_votes_per_candidate.sql")
+	qFacultyCandidateHeatmap = mustReadQuery("analytics_05_heatmap_faculty_candidate_percent.sql")
+	qTurnoutTimeline = mustReadQuery("analytics_06_turnout_cumulative_timeline.sql")
+	qCohortCandidateVotes = mustReadQuery("analytics_07_votes_by_cohort_candidate.sql")
+	qPeakHoursAnalysis = mustReadQuery("analytics_09_peak_hours_analysis.sql")
+	qVotingVelocity = mustReadQuery("analytics_10_voting_velocity.sql")
+	qFacultyParticipation = mustReadQuery("analytics_11_turnout_per_faculty.sql")
 }
 
-var queriesDir string
-for _, dir := range queriesDirs {
-if _, err := os.Stat(filepath.Join(dir, "analytics_11_turnout_per_faculty.sql")); err == nil {
-queriesDir = dir
-break
-}
-}
 
-if queriesDir == "" {
-panic("failed to find queries directory")
-}
-
-qGetHourlyVotesByChannel = mustReadFile(filepath.Join(queriesDir, "analytics_02_timeline_votes_by_channel.sql"))
-qGetHourlyVotesByCandidate = mustReadFile(filepath.Join(queriesDir, "analytics_03_timeline_votes_per_candidate.sql"))
-qFacultyCandidateHeatmap = mustReadFile(filepath.Join(queriesDir, "analytics_05_heatmap_faculty_candidate_percent.sql"))
-qTurnoutTimeline = mustReadFile(filepath.Join(queriesDir, "analytics_06_turnout_cumulative_timeline.sql"))
-qCohortCandidateVotes = mustReadFile(filepath.Join(queriesDir, "analytics_07_votes_by_cohort_candidate.sql"))
-qPeakHoursAnalysis = mustReadFile(filepath.Join(queriesDir, "analytics_09_peak_hours_analysis.sql"))
-qVotingVelocity = mustReadFile(filepath.Join(queriesDir, "analytics_10_voting_velocity.sql"))
-qFacultyParticipation = mustReadFile(filepath.Join(queriesDir, "analytics_11_turnout_per_faculty.sql"))
-}
-
-func mustReadFile(path string) string {
-data, err := os.ReadFile(path)
-if err != nil {
-panic("failed to read query file " + path + ": " + err.Error())
-}
-return string(data)
-}
 // AnalyticsRepository defines the interface for analytics data access
 type AnalyticsRepository interface {
 GetHourlyVotesByChannel(ctx context.Context, electionID int64) ([]HourlyVotes, error)
