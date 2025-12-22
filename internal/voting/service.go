@@ -307,6 +307,16 @@ func (s *Service) castVote(
 			return err
 		}
 
+		// 7.5. Sync election_voters.updated_at so voted voters appear at top of list
+		if _, err := tx.Exec(ctx, `
+			UPDATE election_voters 
+			SET updated_at = $1 
+			WHERE election_id = $2 AND voter_id = $3
+		`, now, electionID, voterID); err != nil {
+			// Non-critical, log but don't fail
+			fmt.Printf("[WARN] Failed to sync election_voters.updated_at: %v\n", err)
+		}
+
 		// 8. Update stats (optional)
 		if s.statsRepo != nil {
 			if err := s.statsRepo.IncrementCandidateCount(ctx, tx, electionID, cand.ID, channel, tpsID); err != nil {
