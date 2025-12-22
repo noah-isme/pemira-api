@@ -333,7 +333,7 @@ func main() {
 						r.Post("/", electionVoterHandler.AdminUpsert)
 						r.Get("/lookup", electionVoterHandler.AdminLookup)
 						r.Patch("/{voterID}", electionVoterHandler.AdminPatch)
-						r.Get("/export", dptHandler.Export)
+						r.Get("/export", electionVoterHandler.ExportToExcel)
 						r.Get("/{voterID}", dptHandler.Get)
 						r.Put("/{voterID}", dptHandler.Update)
 						r.Delete("/{voterID}", dptHandler.Delete)
