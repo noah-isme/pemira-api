@@ -99,3 +99,9 @@ type StaffRegistration struct {
 	UnitID     *int64
 	PositionID *int64
 }
+
+// ResetPasswordRequest represents password reset request
+type ResetPasswordRequest struct {
+	Identifier  string `json:"identifier"`   // NIM/NIDN/NIP
+	NewPassword string `json:"new_password"` // New password
+}

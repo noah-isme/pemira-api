@@ -170,6 +170,40 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, authUser)
 }
 
+// ResetPassword handles POST /auth/reset-password
+// Allows voters to reset their password using NIM/NIDN/NIP
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	// Validate input
+	if req.Identifier == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "NIM/NIDN/NIP wajib diisi.")
+		return
+	}
+	if req.NewPassword == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Password baru wajib diisi.")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Password minimal 6 karakter.")
+		return
+	}
+
+	err := h.service.ResetPasswordByIdentifier(r.Context(), req)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Password berhasil direset.",
+	})
+}
+
 // handleError maps service errors to HTTP responses
 func (h *AuthHandler) handleError(w http.ResponseWriter, err error) {
 	switch {
@@ -184,6 +218,9 @@ func (h *AuthHandler) handleError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, ErrUserNotFound):
 		response.NotFound(w, "USER_NOT_FOUND", "Pengguna tidak ditemukan.")
+
+	case errors.Is(err, ErrVoterNotRegistered):
+		response.NotFound(w, "VOTER_NOT_REGISTERED", "NIM/NIDN/NIP tidak terdaftar atau belum memiliki akun.")
 
 	case errors.Is(err, ErrUsernameExists):
 		response.Conflict(w, "USERNAME_EXISTS", "Username sudah terdaftar.")

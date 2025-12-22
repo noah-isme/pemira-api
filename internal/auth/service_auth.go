@@ -609,6 +609,33 @@ func (s *AuthService) GetCurrentUser(ctx context.Context, userID int64) (*AuthUs
 	}, nil
 }
 
+// ResetPasswordByIdentifier resets password for a voter by NIM/NIDN/NIP
+func (s *AuthService) ResetPasswordByIdentifier(ctx context.Context, req ResetPasswordRequest) error {
+	identifier := strings.TrimSpace(req.Identifier)
+	if identifier == "" {
+		return ErrInvalidRegistration
+	}
+
+	// Find user by voter NIM
+	user, err := s.repo.GetUserByVoterNIM(ctx, identifier)
+	if err != nil {
+		return err // Will return ErrVoterNotRegistered if not found
+	}
+
+	// Hash new password
+	hashedPassword, err := HashPassword(req.NewPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update password
+	if err := s.repo.UpdateUserPassword(ctx, user.ID, hashedPassword); err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}
+
 func normalizeVotingMode(input string) string {
 	mode := strings.ToUpper(strings.TrimSpace(input))
 	if mode == "TPS" {

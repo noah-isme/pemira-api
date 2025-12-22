@@ -13,6 +13,7 @@ var (
 	ErrNIDNExists          = errors.New("nidn already exists")
 	ErrNIPExists           = errors.New("nip already exists")
 	ErrElectionUnavailable = errors.New("no active election for registration")
+	ErrVoterNotRegistered  = errors.New("voter not registered or has no account")
 )
 
 type Repository interface {
@@ -20,7 +21,9 @@ type Repository interface {
 	CreateUserAccount(ctx context.Context, user *UserAccount) (*UserAccount, error)
 	GetUserByUsername(ctx context.Context, username string) (*UserAccount, error)
 	GetUserByID(ctx context.Context, userID int64) (*UserAccount, error)
+	GetUserByVoterNIM(ctx context.Context, nim string) (*UserAccount, error)
 	UpdateUserAccount(ctx context.Context, user *UserAccount) error
+	UpdateUserPassword(ctx context.Context, userID int64, hashedPassword string) error
 	DeactivateUser(ctx context.Context, userID int64) error
 	UpdateLoginTracking(ctx context.Context, userID int64) error
 

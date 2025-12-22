@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -169,6 +170,69 @@ func (r *PgRepository) UpdateUserAccount(ctx context.Context, user *UserAccount)
 		user.IsActive,
 	)
 
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// GetUserByVoterNIM retrieves a user by their voter's NIM (for password reset)
+func (r *PgRepository) GetUserByVoterNIM(ctx context.Context, nim string) (*UserAccount, error) {
+	query := `
+		SELECT ua.id, ua.username, ua.password_hash, ua.role, ua.voter_id, ua.tps_id, 
+		       ua.lecturer_id, ua.staff_id, ua.is_active, ua.created_at, ua.updated_at, ua.last_login_at
+		FROM user_accounts ua
+		JOIN voters v ON v.id = ua.voter_id
+		WHERE v.nim = $1 AND ua.is_active = true
+		LIMIT 1
+	`
+
+	var user UserAccount
+	var lastLoginAt sql.NullTime
+
+	err := r.db.QueryRow(ctx, query, nim).Scan(
+		&user.ID,
+		&user.Username,
+		&user.PasswordHash,
+		&user.Role,
+		&user.VoterID,
+		&user.TPSID,
+		&user.LecturerID,
+		&user.StaffID,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&lastLoginAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrVoterNotRegistered
+		}
+		return nil, err
+	}
+
+	if lastLoginAt.Valid {
+		user.LastLoginAt = &lastLoginAt.Time
+	}
+
+	return &user, nil
+}
+
+// UpdateUserPassword updates only the password hash for a user
+func (r *PgRepository) UpdateUserPassword(ctx context.Context, userID int64, hashedPassword string) error {
+	query := `
+		UPDATE user_accounts
+		SET password_hash = $2, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.Exec(ctx, query, userID, hashedPassword)
 	if err != nil {
 		return err
 	}
