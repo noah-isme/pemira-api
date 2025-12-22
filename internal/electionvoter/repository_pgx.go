@@ -888,7 +888,7 @@ func nullableTimePtr(nt sql.NullTime) *time.Time {
 	return nil
 }
 
-// BlacklistVoter deactivates the user account for a voter and updates election_voters status
+// BlacklistVoter deactivates the user account for a voter, cancels their vote, and updates status
 func (r *pgRepository) BlacklistVoter(ctx context.Context, electionID, voterID int64, reason string) error {
 	// First, get the voter_id from election_voters
 	var actualVoterID int64
@@ -918,6 +918,32 @@ func (r *pgRepository) BlacklistVoter(ctx context.Context, electionID, voterID i
 	if result.RowsAffected() == 0 {
 		return shared.ErrNotFound
 	}
+
+	// Get token_hash from voter_status to find and delete the vote
+	var tokenHash sql.NullString
+	r.db.QueryRow(ctx, `
+		SELECT token_hash FROM voter_status 
+		WHERE election_id = $1 AND voter_id = $2
+	`, electionID, actualVoterID).Scan(&tokenHash)
+
+	// Delete the vote if token_hash exists
+	if tokenHash.Valid && tokenHash.String != "" {
+		r.db.Exec(ctx, `
+			DELETE FROM votes 
+			WHERE election_id = $1 AND token_hash = $2
+		`, electionID, tokenHash.String)
+	}
+
+	// Reset voter_status (clear vote record)
+	r.db.Exec(ctx, `
+		UPDATE voter_status 
+		SET has_voted = false, 
+		    voted_at = NULL, 
+		    voting_method = NULL,
+		    token_hash = NULL,
+		    updated_at = NOW() 
+		WHERE election_id = $1 AND voter_id = $2
+	`, electionID, actualVoterID)
 
 	// Update election_voters status to BLOCKED
 	_, err = r.db.Exec(ctx, `
