@@ -42,6 +42,7 @@ type ElectionVoter struct {
 	HasVoted            *bool      `json:"has_voted,omitempty"`
 	LastLoginAt         *time.Time `json:"last_login_at,omitempty"`
 	DigitalSignatureURL *string    `json:"digital_signature_url,omitempty"`
+	IsBlacklisted       bool       `json:"is_blacklisted"`
 }
 
 type LookupResult struct {

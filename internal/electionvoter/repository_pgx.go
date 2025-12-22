@@ -562,7 +562,8 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 			v.academic_status,
 			vs.has_voted,
 			ua.last_login_at,
-			vs.digital_signature_url
+			vs.digital_signature_url,
+			NOT COALESCE(ua.is_active, true) AS is_blacklisted
 		FROM election_voters ev
 		JOIN voters v ON v.id = ev.voter_id
 		LEFT JOIN voter_status vs ON vs.election_id = ev.election_id AND vs.voter_id = ev.voter_id
@@ -592,6 +593,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 		var hasVoted sql.NullBool
 		var lastLoginAt sql.NullTime
 		var digitalSignatureURL sql.NullString
+		var isBlacklisted bool
 
 		err := rows.Scan(
 			&item.ID,
@@ -617,6 +619,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 			&hasVoted,
 			&lastLoginAt,
 			&digitalSignatureURL,
+			&isBlacklisted,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan election_voters: %w", err)
@@ -632,6 +635,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 		item.HasVoted = nullableBoolPtr(hasVoted)
 		item.LastLoginAt = nullableTimePtr(lastLoginAt)
 		item.DigitalSignatureURL = nullableStringPtr(digitalSignatureURL)
+		item.IsBlacklisted = isBlacklisted
 		items = append(items, item)
 	}
 

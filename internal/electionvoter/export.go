@@ -56,7 +56,7 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 		"No", "NIM", "Nama", "Tipe", "Fakultas", "Program Studi",
 		"Angkatan", "Semester", "Status Akademik", "Email",
 		"Status DPT", "Metode Voting", "Sudah Memilih", "Waktu Memilih",
-		"Login Terakhir", "Tanda Tangan",
+		"Login Terakhir", "Blacklist", "Tanda Tangan",
 	}
 
 	// Style for header
@@ -83,7 +83,7 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 		"A": 5, "B": 15, "C": 30, "D": 12, "E": 20, "F": 25,
 		"G": 10, "H": 10, "I": 15, "J": 30,
 		"K": 12, "L": 12, "M": 15, "N": 20,
-		"O": 20, "P": 25,
+		"O": 20, "P": 10, "Q": 25,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetName, col, col, width)
@@ -123,6 +123,13 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 			f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), v.LastLoginAt.In(time.FixedZone("WIB", 7*3600)).Format("02/01/2006 15:04"))
 		}
 
+		// Blacklist status
+		blacklist := "Tidak"
+		if v.IsBlacklisted {
+			blacklist = "Ya"
+		}
+		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), blacklist)
+
 		// Embed signature image if URL exists
 		if v.DigitalSignatureURL != nil && *v.DigitalSignatureURL != "" {
 			imgData, ext := downloadImage(httpClient, *v.DigitalSignatureURL)
@@ -130,7 +137,7 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 				// Set row height for image (approx 50 pixels = 37.5 points)
 				f.SetRowHeight(sheetName, row, 50)
 
-				cell := fmt.Sprintf("P%d", row)
+				cell := fmt.Sprintf("Q%d", row)
 				if err := f.AddPictureFromBytes(sheetName, cell, &excelize.Picture{
 					Extension: ext,
 					File:      imgData,
@@ -145,7 +152,7 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				// Fallback to URL if download fails
-				f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), *v.DigitalSignatureURL)
+				f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), *v.DigitalSignatureURL)
 			}
 		}
 	}
