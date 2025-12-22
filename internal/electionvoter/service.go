@@ -163,6 +163,16 @@ func ValidateFilter(filter ListFilter) (ListFilter, error) {
 	return filter, nil
 }
 
+// BlacklistVoter deactivates the user account associated with a voter
+func (s *Service) BlacklistVoter(ctx context.Context, electionID, voterID int64, reason string) error {
+	return s.repo.BlacklistVoter(ctx, electionID, voterID, reason)
+}
+
+// UnblacklistVoter reactivates a previously blacklisted voter account
+func (s *Service) UnblacklistVoter(ctx context.Context, electionID, voterID int64) error {
+	return s.repo.UnblacklistVoter(ctx, electionID, voterID)
+}
+
 func normalizeAcademicStatus(raw *string) (string, error) {
 	status := defaultAcademicStatus
 	if raw != nil {

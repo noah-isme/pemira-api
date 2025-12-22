@@ -883,3 +883,85 @@ func nullableTimePtr(nt sql.NullTime) *time.Time {
 	}
 	return nil
 }
+
+// BlacklistVoter deactivates the user account for a voter and updates election_voters status
+func (r *pgRepository) BlacklistVoter(ctx context.Context, electionID, voterID int64, reason string) error {
+	// First, get the voter_id from election_voters
+	var actualVoterID int64
+	err := r.db.QueryRow(ctx, `
+		SELECT voter_id FROM election_voters WHERE election_id = $1 AND id = $2
+	`, electionID, voterID).Scan(&actualVoterID)
+	if err != nil {
+		// Try with voterID as voter_id instead
+		err = r.db.QueryRow(ctx, `
+			SELECT voter_id FROM election_voters WHERE election_id = $1 AND voter_id = $2
+		`, electionID, voterID).Scan(&actualVoterID)
+		if err != nil {
+			return shared.ErrNotFound
+		}
+	}
+
+	// Deactivate user account
+	result, err := r.db.Exec(ctx, `
+		UPDATE user_accounts 
+		SET is_active = false, updated_at = NOW() 
+		WHERE voter_id = $1
+	`, actualVoterID)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return shared.ErrNotFound
+	}
+
+	// Update election_voters status to BLOCKED
+	_, err = r.db.Exec(ctx, `
+		UPDATE election_voters 
+		SET status = 'BLOCKED', updated_at = NOW() 
+		WHERE election_id = $1 AND voter_id = $2
+	`, electionID, actualVoterID)
+
+	return err
+}
+
+// UnblacklistVoter reactivates a previously blacklisted voter's user account
+func (r *pgRepository) UnblacklistVoter(ctx context.Context, electionID, voterID int64) error {
+	// First, get the voter_id from election_voters
+	var actualVoterID int64
+	err := r.db.QueryRow(ctx, `
+		SELECT voter_id FROM election_voters WHERE election_id = $1 AND id = $2
+	`, electionID, voterID).Scan(&actualVoterID)
+	if err != nil {
+		// Try with voterID as voter_id instead
+		err = r.db.QueryRow(ctx, `
+			SELECT voter_id FROM election_voters WHERE election_id = $1 AND voter_id = $2
+		`, electionID, voterID).Scan(&actualVoterID)
+		if err != nil {
+			return shared.ErrNotFound
+		}
+	}
+
+	// Reactivate user account
+	result, err := r.db.Exec(ctx, `
+		UPDATE user_accounts 
+		SET is_active = true, updated_at = NOW() 
+		WHERE voter_id = $1
+	`, actualVoterID)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return shared.ErrNotFound
+	}
+
+	// Update election_voters status to VERIFIED
+	_, err = r.db.Exec(ctx, `
+		UPDATE election_voters 
+		SET status = 'VERIFIED', updated_at = NOW() 
+		WHERE election_id = $1 AND voter_id = $2
+	`, electionID, actualVoterID)
+
+	return err
+}

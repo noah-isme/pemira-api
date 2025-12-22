@@ -239,6 +239,72 @@ func (h *Handler) VoterStatus(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, ev)
 }
 
+// AdminBlacklist handles POST /admin/elections/{electionID}/voters/{voterID}/blacklist
+// This deactivates the user account associated with the voter, preventing login
+func (h *Handler) AdminBlacklist(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	electionID, ok := parseID(w, chi.URLParam(r, "electionID"))
+	if !ok {
+		return
+	}
+	voterID, ok := parseID(w, chi.URLParam(r, "voterID"))
+	if !ok {
+		return
+	}
+
+	// Parse optional reason from body
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	err := h.svc.BlacklistVoter(ctx, electionID, voterID, req.Reason)
+	if err != nil {
+		switch err {
+		case shared.ErrNotFound:
+			response.NotFound(w, "NOT_FOUND", "Pemilih tidak ditemukan")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mem-blacklist pemilih")
+			return
+		}
+	}
+
+	response.Success(w, http.StatusOK, map[string]string{
+		"message": "Akun pemilih berhasil di-blacklist",
+	})
+}
+
+// AdminUnblacklist handles POST /admin/elections/{electionID}/voters/{voterID}/unblacklist
+// This reactivates a previously blacklisted user account
+func (h *Handler) AdminUnblacklist(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	electionID, ok := parseID(w, chi.URLParam(r, "electionID"))
+	if !ok {
+		return
+	}
+	voterID, ok := parseID(w, chi.URLParam(r, "voterID"))
+	if !ok {
+		return
+	}
+
+	err := h.svc.UnblacklistVoter(ctx, electionID, voterID)
+	if err != nil {
+		switch err {
+		case shared.ErrNotFound:
+			response.NotFound(w, "NOT_FOUND", "Pemilih tidak ditemukan")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal menghapus blacklist pemilih")
+			return
+		}
+	}
+
+	response.Success(w, http.StatusOK, map[string]string{
+		"message": "Blacklist akun pemilih berhasil dihapus",
+	})
+}
+
 func parseID(w http.ResponseWriter, raw string) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {

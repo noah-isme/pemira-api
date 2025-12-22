@@ -334,6 +334,8 @@ func main() {
 						r.Post("/", electionVoterHandler.AdminUpsert)
 						r.Get("/lookup", electionVoterHandler.AdminLookup)
 						r.Patch("/{voterID}", electionVoterHandler.AdminPatch)
+						r.Post("/{voterID}/blacklist", electionVoterHandler.AdminBlacklist)
+						r.Post("/{voterID}/unblacklist", electionVoterHandler.AdminUnblacklist)
 						r.Get("/export", electionVoterHandler.ExportToExcel)
 						r.Get("/{voterID}", dptHandler.Get)
 						r.Put("/{voterID}", dptHandler.Update)
