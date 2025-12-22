@@ -1,20 +1,20 @@
 package analytics
 
 import (
-"context"
-"errors"
-"net/http"
-"strconv"
+	"context"
+	"errors"
+	"net/http"
+	"strconv"
 
-"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5"
 )
 
 // Response helper interface (compatible with internal/http/response)
 type ResponseWriter interface {
-Success(w http.ResponseWriter, statusCode int, data interface{})
-BadRequest(w http.ResponseWriter, message string, details interface{})
-InternalServerError(w http.ResponseWriter, message string)
-NotFound(w http.ResponseWriter, message string)
+	Success(w http.ResponseWriter, statusCode int, data interface{})
+	BadRequest(w http.ResponseWriter, message string, details interface{})
+	InternalServerError(w http.ResponseWriter, message string)
+	NotFound(w http.ResponseWriter, message string)
 }
 
 // AnalyticsService defines the interface for analytics operations

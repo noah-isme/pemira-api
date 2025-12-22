@@ -263,31 +263,31 @@ return &result, nil
 
 // GetFacultyParticipation returns participation statistics per faculty
 func (r *AnalyticsRepo) GetFacultyParticipation(
-ctx context.Context,
-electionID int64,
+	ctx context.Context,
+	electionID int64,
 ) ([]FacultyParticipation, error) {
-rows, err := r.db.Query(ctx, qFacultyParticipation, electionID)
-if err != nil {
-return nil, err
-}
-defer rows.Close()
+	rows, err := r.db.Query(ctx, qFacultyParticipation, electionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-var result []FacultyParticipation
-for rows.Next() {
-var row FacultyParticipation
-if err := rows.Scan(
-&row.FacultyCode,
-&row.FacultyName,
-&row.TotalEligible,
-&row.TotalVoted,
-&row.TurnoutPercent,
-); err != nil {
-return nil, err
-}
-result = append(result, row)
-}
-if rows.Err() != nil {
-return nil, rows.Err()
-}
-return result, nil
+	var result []FacultyParticipation
+	for rows.Next() {
+		var row FacultyParticipation
+		if err := rows.Scan(
+			&row.FacultyCode,
+			&row.FacultyName,
+			&row.TotalEligible,
+			&row.TotalVoted,
+			&row.TurnoutPercent,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return result, nil
 }

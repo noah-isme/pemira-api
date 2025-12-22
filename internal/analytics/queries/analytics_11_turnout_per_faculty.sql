@@ -14,15 +14,15 @@ WITH base AS (
       AND vs.is_eligible = TRUE
 )
 SELECT
-    faculty_code,
-    faculty_name,
+    COALESCE(faculty_code, '')             AS faculty_code,
+    COALESCE(faculty_name, 'Unknown')      AS faculty_name,
     COUNT(*)                                 AS total_eligible,
     SUM(CASE WHEN has_voted THEN 1 ELSE 0 END) AS total_voted,
     ROUND(
         SUM(CASE WHEN has_voted THEN 1 ELSE 0 END)::NUMERIC
         / NULLIF(COUNT(*), 0) * 100,
         2
-    ) AS turnout_percent
+    )::FLOAT AS turnout_percent
 FROM base
 GROUP BY faculty_code, faculty_name
 ORDER BY faculty_name;

@@ -3,6 +3,8 @@ package electionvoter
 import (
 	"bytes"
 	"fmt"
+	_ "image/jpeg" // Register JPEG decoder
+	_ "image/png"  // Register PNG decoder
 	"io"
 	"net/http"
 	"strconv"
@@ -83,7 +85,7 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 		"A": 5, "B": 15, "C": 30, "D": 12, "E": 20, "F": 25,
 		"G": 10, "H": 10, "I": 15, "J": 30,
 		"K": 12, "L": 12, "M": 15, "N": 20,
-		"O": 20, "P": 10, "Q": 25,
+		"O": 20, "P": 10, "Q": 40,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetName, col, col, width)
@@ -132,10 +134,10 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 
 		// Embed signature image if URL exists
 		if v.DigitalSignatureURL != nil && *v.DigitalSignatureURL != "" {
-			imgData, ext := downloadImage(httpClient, *v.DigitalSignatureURL)
-			if imgData != nil {
-				// Set row height for image (approx 50 pixels = 37.5 points)
-				f.SetRowHeight(sheetName, row, 50)
+			imgData, ext, err := downloadImage(httpClient, *v.DigitalSignatureURL)
+			if err == nil && imgData != nil {
+				// Set row height for image (approx 80 pixels = 60 points)
+				f.SetRowHeight(sheetName, row, 80)
 
 				cell := fmt.Sprintf("Q%d", row)
 				if err := f.AddPictureFromBytes(sheetName, cell, &excelize.Picture{
@@ -143,15 +145,14 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 					File:      imgData,
 					Format: &excelize.GraphicOptions{
 						AutoFit: true,
-						ScaleX:  0.3,
-						ScaleY:  0.3,
 					},
 				}); err != nil {
 					// Fallback to URL if image embedding fails
 					f.SetCellValue(sheetName, cell, *v.DigitalSignatureURL)
 				}
 			} else {
-				// Fallback to URL if download fails
+				// Fallback to URL if download fails (log error in console if needed, but keep excel clean)
+				fmt.Printf("Failed to download signature for voter %s: %v\n", v.NIM, err)
 				f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), *v.DigitalSignatureURL)
 			}
 		}
@@ -172,20 +173,20 @@ func (h *Handler) ExportToExcel(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadImage downloads image from URL and returns bytes and extension
-func downloadImage(client *http.Client, url string) ([]byte, string) {
+func downloadImage(client *http.Client, url string) ([]byte, string, error) {
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, ""
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, ""
+		return nil, "", fmt.Errorf("status code %d", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, ""
+		return nil, "", err
 	}
 
 	// Detect extension from content type or URL
@@ -197,7 +198,7 @@ func downloadImage(client *http.Client, url string) ([]byte, string) {
 		ext = ".jpg"
 	}
 
-	return data, ext
+	return data, ext, nil
 }
 
 func derefStr(s *string) string {
