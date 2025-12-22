@@ -919,14 +919,14 @@ func (r *pgRepository) BlacklistVoter(ctx context.Context, electionID, voterID i
 		return shared.ErrNotFound
 	}
 
-	// Get token_hash from voter_status to find and delete the vote
+	// Get vote_token_hash from voter_status to find and delete the vote
 	var tokenHash sql.NullString
 	r.db.QueryRow(ctx, `
-		SELECT token_hash FROM voter_status 
+		SELECT vote_token_hash FROM voter_status 
 		WHERE election_id = $1 AND voter_id = $2
 	`, electionID, actualVoterID).Scan(&tokenHash)
 
-	// Delete the vote if token_hash exists
+	// Delete the vote if vote_token_hash exists
 	if tokenHash.Valid && tokenHash.String != "" {
 		r.db.Exec(ctx, `
 			DELETE FROM votes 
@@ -940,7 +940,7 @@ func (r *pgRepository) BlacklistVoter(ctx context.Context, electionID, voterID i
 		SET has_voted = false, 
 		    voted_at = NULL, 
 		    voting_method = NULL,
-		    token_hash = NULL,
+		    vote_token_hash = NULL,
 		    updated_at = NOW() 
 		WHERE election_id = $1 AND voter_id = $2
 	`, electionID, actualVoterID)
